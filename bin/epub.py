@@ -198,6 +198,11 @@ div.box { margin: 1em; padding: 1em; border: thin solid black; }
         self.encode = cfg.setdefault('encode', 'utf-8')
         self.dry = cfg.setdefault('dry')
         self.count = cfg.setdefault('count', 0)
+        strip = cfg.setdefault('strip')
+        if strip is None:
+            self.strip = None
+        else:
+            self.strip = re.split(r'\s+', strip)
 
         self.manifest = []
         self.toc = []
@@ -314,7 +319,7 @@ div.box { margin: 1em; padding: 1em; border: thin solid black; }
         into xhtml, add into manifester and toc list'''
         soup = MySoup(fname, self.encode, self.selector)
         soup.extractInPageAnchors()
-        soup.cleanPage()
+        soup.cleanPage(self.strip)
         # copy all images into /OEBPS/Images
         for c in soup.images():
             try:
@@ -536,7 +541,7 @@ class MySoup(BeautifulSoup):
                     c.extract()
             except: pass
         
-    def cleanPage(self):
+    def cleanPage(self, strip):
         ''' clean page '''
         # clean class/id for h1, h2, ...
         for h in self.mainContent.find_all(re.compile(r'^h\d')):
@@ -573,6 +578,19 @@ class MySoup(BeautifulSoup):
         # decompose comment container (O'Reilly)
         for h in self.mainContent.select('div.comment_container'):
             h.decompose()
+
+        # run strip list
+        if strip:
+            if self.selector:
+                tag = self.select(self.selector)
+                if not tag: return
+                tag = tag[0]
+            else:
+                tag = self.mainContent
+            for strip_tag in strip:
+                for st in tag.select(strip_tag):
+                    st.extract()
+
         
     def output(self, prettify=False, selector=None, unwrap=False):
         try:
@@ -663,13 +681,14 @@ if __name__ == "__main__":
             'epub':     None,
             'unwrap':   False,
             'encode':   'utf-8',
+            'strip':    None,
             'count':    0,
         }
 
         try:
             opt_short = 'c:a:t:s:j:hr:e:du'
             opt_long = ['cover=', 'author=', 'title=',
-                        'selector=', 'help', 'root=',
+                        'selector=', 'strip=', 'help', 'root=',
                         'count=', 'unwrap', 'dry' ]
             opts, files = getopt.getopt(sys.argv[1:], opt_short, opt_long)
         except getopt.GetoptError as err:
@@ -717,6 +736,8 @@ if __name__ == "__main__":
                 cfg['root'] = v
             elif o == '-u' or o == '--unwrap':
                 cfg['unwrap'] = True
+            elif o == '--strip':
+                cfg['strip'] = v
             elif o == '--encode':
                 cfg['encode'] = v
             elif o == '--count':
