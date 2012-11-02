@@ -72,6 +72,11 @@ pre {
   padding: 0.6cm 2px;
 }
 div.box { margin: 1em; padding: 1em; border: thin solid black; }
+div#book-cover { width: 600px; height: 800px; padding: 16px; text-align: center; }
+div#book-cover-title { font-size: 64px; margin: 5cm 0px 1cm 0px; }
+div#book-cover-title2 { font-size: 18px; margin: 0px 0px 1cm 0px; }
+div#book-cover-author { font-size: 32px; margin: 1cm 0px; }
+div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
 #cover-image { position: relative; }
 #cover-image img { display: block; margin: 2px auto; -width: 96%; }
 '''
@@ -167,6 +172,14 @@ div.box { margin: 1em; padding: 1em; border: thin solid black; }
    <img src="{cover}" />
  </div>
 '''
+    _T_cover_text = u'''
+ <div id="book-cover">
+   <div id="book-cover-title">{title}</div>
+   <div id="book-cover-title2">{title2}</div>
+   <div id="book-cover-author">{author}</div>
+   <div id="book-cover-other">{other}</div>
+ </div>
+'''
     # template of xhtml, replace title, content
     _T_xhtml = u'''<?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
@@ -198,6 +211,8 @@ div.box { margin: 1em; padding: 1em; border: thin solid black; }
         self.encode = cfg.setdefault('encode', 'utf-8')
         self.dry = cfg.setdefault('dry')
         self.count = cfg.setdefault('count', 0)
+        self.title2 = cfg.setdefault('title2', '')
+        self.other = cfg.setdefault('other', '')
         strip = cfg.setdefault('strip')
         if strip is None:
             self.strip = None
@@ -268,6 +283,18 @@ div.box { margin: 1em; padding: 1em; border: thin solid black; }
                 sc = EPub._T_cover.format(cover=unicode(img))
                 fp.write(EPub._T_xhtml.format(title=u'Cover', content=sc))
             self.addTOC(href=u'cover.xhtml', Id=u'cover', text=u'Cover')
+        else:
+            # no cover image available, create a text page that
+            # contains title and author
+            rname = '{0}/OEBPS/cover.xhtml'.format(self.root)
+            with codecs.open(rname, 'w', 'utf-8') as fp:
+                sc = EPub._T_cover_text.format(
+                       title=unicode(self.title),
+                       title2=unicode(self.title2),
+                       author=unicode(self.author),
+                       other=unicode(self.other))
+                fp.write(EPub._T_xhtml.format(title=u'Cover', content=sc))
+            self.addTOC(href=u'cover.xhtml', Id=u'cover', text=u'Cover')
 
         
     def parse(self, count = 0, pattern = '*.htm*', verbose = False):
@@ -324,6 +351,9 @@ div.box { margin: 1em; padding: 1em; border: thin solid black; }
         for c in soup.images():
             try:
                 fimg = c['src']
+                if re.match(r'http://.*', fimg):
+                    c.extract()
+                    continue
                 if self.src is not None:
                     fimg = os.path.join(self.src, fimg)
                 nf,isDup = self.copyResFile(fimg)
@@ -588,7 +618,8 @@ class MySoup(BeautifulSoup):
             else:
                 tag = self.mainContent
             for strip_tag in strip:
-                for st in tag.select(strip_tag):
+                esc_tag = re.sub(r'__', ' ', strip_tag)
+                for st in tag.select(esc_tag):
                     st.extract()
 
         
