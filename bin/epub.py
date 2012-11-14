@@ -312,6 +312,8 @@ div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
         if count > 0:
             flist = flist[:count]
         for f in flist:
+            if re.search(r'index.*\.x?html?$', f, flags=re.I):
+                continue
             self.parsePage(f)
             if verbose: print f
         self.addManifest(u"style.css", u"style.css", u"text/css")
@@ -344,6 +346,7 @@ div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
     def parsePage(self, fname):
         ''' parse a page, copy/convert img files, extract mainContent
         into xhtml, add into manifester and toc list'''
+        print "parsePage: " + fname
         soup = MySoup(fname, self.encode, self.selector)
         soup.extractInPageAnchors()
         soup.cleanPage(self.strip)

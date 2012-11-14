@@ -268,8 +268,8 @@ if __name__ == '__main__':
         beef = bs.get(opt['selectorPage'])
         bs.save(beef, 'bbb.html', 'testPage')
 
-    task = MyTask(opt)
-    task.run()
+    #task = MyTask(opt)
+    #task.run()
 
     #task.run1('http://www.pingfandeshijie.com', 'di-san-bu-{0:02d}.html', range(1, 55))
 
