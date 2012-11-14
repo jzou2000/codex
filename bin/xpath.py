@@ -21,9 +21,10 @@ class XPath:
             raise Exception('Bad xpath: {}'.format(self.xpath))
 
     def showPath(self):
-        print self.xpath
+        s = [ self.xpath, ]
         for t in self.node:
-            print('tag={0}[{1}]'.format(t.tag or '', t.n or ''))
+            s.append('tag={0}[{1}]'.format(t.tag or '', t.n or ''))
+        return ''.join(s)
 
     def parseNode(self, token):
         ''' parse a node in xpath
@@ -51,9 +52,6 @@ class XPath:
             doc         current doc.node
             n           n-th node in xpath
         '''
-        print '-'*40
-        print '_find({0}) tag={1}[{2}]'.format(n, self.node[n].tag, self.node[n].n)
-        print doc
         node = self.node[n]
         result = []
         if node.tag is None:
@@ -70,9 +68,6 @@ class XPath:
             # this is the last node in xpath chain
             result = tags
         else:
-            print '----found leve={0} {1} tags'.format(n, len(tags))
-            for tc in tags:
-                print '----{0}'.format(tc.name)
             for tc in tags:
                 result.extend(self._find(tc, n + 1))
         return result
@@ -83,33 +78,27 @@ class XPath:
             myname = doc.name
         except:
             return []
-        print myname + '.findTag({0}[{1}]) {2}'.format(tag, n or '', '+' if recursive else '')
         result = []
         nmax = len(doc.contents)
-        print '    {0} children'.format(nmax)
         ti = 0
         for i, c in enumerate(doc.contents):
             found = False
             try:
-                print '        {0} {1}'.format(i, c.name)
                 if tag == '*' or c.name == tag:
                     ti += 1
                     if n is None or self.matchSequence(ti, n, nmax):
                         found = True
             except Exception, ex:
                 pass
-                #print 'Exception: {0}'.format(ex)
             if found:
-                print '    append tag {0} No.{1}'.format(c.name, ti)
+                #print '    append tag {0} No.{1}'.format(c.name, ti)
                 result.append(c)
             elif recursive:
-                print '    recursivly call'
                 result.extend(self._findTag(c, tag, n, recursive))
-        print myname + '.findTag return'
         return result
 
     def matchSequence(self, i, n = None, nmax = None):
-        print 'match i={0} n={1} {2}'.format(i, n, type(n))
+        #print 'match i={0} n={1} {2}'.format(i, n, type(n))
         if isinstance(n, int):
             # compare integer directly
             return i == n
@@ -159,9 +148,6 @@ if __name__ == '__main__':
     xp.showPath()
     bs = BeautifulSoup(doc)
     doc = bs.html
-    #print 'dump top children'
-    #for c in bs:
-    #    print c.name
     print '\nNow going to find'
     tag = xp.find(doc)
     print '='*50
