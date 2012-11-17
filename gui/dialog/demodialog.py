@@ -24,13 +24,13 @@ import gtk
 
 class DemoDialogApp(gtk.Window):
 
-    def __init__(self):
+    def __init__(self, title =None, width=300, height=200):
         gtk.Window.__init__(self)
-        self.set_title(self.__class__.__name__)
+        self.set_title(title if title is not None else self.__class__.__name__)
         self.set_border_width(10)
-        self.set_size_request(300, 200)
-        self.connect('destroy', self.on_destroy)
-        self.connect('delete-event', self.on_delete_event)
+        self.set_size_request(width, height)
+        self.connect('destroy', lambda *w: gtk.main_quit())
+        self.connect('delete-event', lambda *w: False)
         
         vbox = gtk.VBox()        #homogenous, spacing
         
@@ -49,12 +49,6 @@ class DemoDialogApp(gtk.Window):
         
     def run(self):
         gtk.main()
-        
-    def on_delete_event(self, widget, event, data = None):
-        return False
-        
-    def on_destroy(self, widget, data = None):
-        gtk.main_quit()
         
     def on_modal(self, widget, data = None):
         button = gtk.Button('OK')
