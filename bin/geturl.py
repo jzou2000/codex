@@ -3,10 +3,11 @@
 
 import os, sys, re, getopt, time, random, codecs
 import json
-import urllib, urlparse
+import urllib2, urlparse
 from bs4 import BeautifulSoup
 
-''' pingfandeshijie
+'''
+http://www.pingfandeshijie.com 平凡的世界
 
   div.main
     h1
@@ -17,6 +18,30 @@ from bs4 import BeautifulSoup
       class=ad-.*, navigation, respond
       ol.class=commentlist
 '''
+
+'''
+example usage of urlparse
+
+>>> import urlparse
+>>> ref = "http://site/doc/index.html"
+>>> u1 = "a.html"
+>>> u2 = 'ch1/s1.html'
+>>> u3 = '/book/ch2/s2.html'
+>>> urlparse.urlparse(ref)
+ParseResult(scheme='http', netloc='site', path='/doc/index.html', params='', query='', fragment='')
+>>> ref2 = "http://site/doc"
+>>> urlparse.urlparse(ref2)
+ParseResult(scheme='http', netloc='site', path='/doc', params='', query='', fragment='')
+>>> urlparse.urljoin(ref, u1)
+'http://site/doc/a.html'
+>>> urlparse.urljoin(ref, u2)
+'http://site/doc/ch1/s1.html'
+>>> urlparse.urljoin(ref, u3)
+'http://site/book/ch2/s2.html'
+>>> 
+
+'''
+
 
 def UrlPath(url):
     ''' divide url into path/file '''
@@ -119,39 +144,57 @@ class MySoup(BeautifulSoup):
         try:
             f = None
             if self.cache is not None and os.path.exists(self.cache):
+                # cache exists and use it instead
                 fname = self.cache
                 f = open(self.cache, 'r')
             else:
                 fname = self.url
-                f = urllib.urlopen(self.url)
+                f = urllib2.urlopen(self.url)
             page = f.read()
             f.close()
             if self.cache is not None and not os.path.exists(self.cache):
+                # cache specified but it doesn't exist, create one
                 with open(self.cache, 'w') as f:
                     f.write(page)
-
+            # check encoding and convert into utf-8 if it is not
+            #     alternation: use from_encoding="encoding"
+            #         todo: can from_encoding replace charset=?
             m = re.search(r'charset=([^ "\']+)', page, flags=re.I)
             if m:
                 encoding = m.group(1)
-                print 'encoding={}\n    {}'.format(encoding, fname)
+                ##print 'encoding={}\n    {}'.format(encoding, fname)
                 charset = 'charset={}'.format(encoding)
+                if re.match(r'gb2312', encoding, re.IGNORECASE):
+                    encoding = 'gb18030'
                 page = unicode(page, encoding)
-                page = re.sub(charset, 'charset=UTF-8', page, flags=re.I)
-            #print page.encode('utf-8')
+                page = re.sub(charset, 'charset=UTF-8', page, flags=re.IGNORECASE)
             BeautifulSoup.__init__(self, page)
         except Exception, ex:
             print("Fail to load url {}\n{}".format(self.url, ex))
             raise ex
 
-    def save(self, soup, fname, title=None):
-        #print u'save: fname={} title={}'.format(fname, title)
-        c = soup.prettify()
-        t = title
-        s = MySoup._temp.format(title=unicode(t), content=c)
+    def save(self, soup, fname, title=None, template = None):
+        ''' save soup into a file using given template '''
+        if template is None:
+            template = MySoup._temp
+        s = template.format(title=unicode(title), content=soup.prettify())
         with codecs.open(fname, 'w', 'utf-8') as fp:
             fp.write(s)
 
     def get(self, selector):
+        ''' get a soup object according to the selector
+            return object can be an object exists in self, or a new created div
+            if multiple objects are selected.
+
+            steps to get the result
+            1. choose the 'root' from selector.selector
+            2. choose from 'include' list
+            3. remove from 'exclude' list
+            
+            each item (include/exclude) can be a css-selector or an xpath
+            an xpath is identifed by preceeding 'xpath:'
+            
+        '''
         if 'selector' not in selector:
             raise Exception('selector is not defined')
         tags = self.select(selector['selector'])
@@ -215,11 +258,10 @@ class UrlTarget:
                 raise Exception('no file name in URL')
         else:
             self.fname = fname
-        print('url={}, file={}'.format(self.url, self.fname))
 
     def download(self):
         try:
-            f = urllib.urlopen(self.url)
+            f = urllib2.urlopen(self.url)
             s = f.read()
             f.close()
             with open(self.fname, 'w') as f:
