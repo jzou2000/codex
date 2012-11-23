@@ -7,19 +7,6 @@ import urllib2, urlparse
 from bs4 import BeautifulSoup
 
 '''
-http://www.pingfandeshijie.com 平凡的世界
-
-  div.main
-    h1
-    div.info                                    x
-    div.content
-      div[style: float|clear,id,clsss]          x
-      h3[id='comments']            x
-      class=ad-.*, navigation, respond
-      ol.class=commentlist
-'''
-
-'''
 example usage of urlparse
 
 >>> import urlparse
@@ -54,16 +41,18 @@ def UrlPath(url):
 def loadJson(fname):
     ''' Load configuration from json file '''
     try:
-        print "load json from " + fname
         with codecs.open(fname, 'r', 'utf-8') as fp:
             return json.load(fp)
     except Exception as ex:
-        print 'Fail to load json:' + ex
+        print 'Fail to load json: ' + ex
         raise ex
 
 def dumpJson(jo):
     ''' Dump the content of json object '''
     print json.dumps(jo, sort_keys=True, indent=4, encoding='utf-8')
+
+
+
 
 class MyTask:
     '''Get a list of url'''
@@ -81,29 +70,16 @@ class MyTask:
     def run(self):
         ''' load files from an index page, file URLs in index'''
         url = self.opt['url']
-        url_path, fname = UrlPath(url)
-        if url_path is None:
-            url_path = 'http://vip.book.sina.com.cn/book'
-        upr = urlparse.urlparse(url)
-        soup = MySoup(url, 'index-url.html')
-        itag = soup.get(self.opt['selectorIndex'])
+        soup = MySoup(url, 'index-cache.html')
+        tagIndex = soup.get(self.opt['selectorIndex'])
 
-        links = itag.find_all('a')
         nn = 1
         fnameTemp = u'{seq:03d}.html'
-        for h in links:
+        for h in tagIndex.find_all('a'):
             if 'target' in h:
                 del h['target']
             title = h.string
-            href = str(h['href'])
-            if re.match(r'^http:', href):
-                pass
-            if re.match(r'^/', href):
-                href = upr[1] + href # ParseResult.netloc
-            else:
-                href = '{}/{}'.format(url_path, href)
-
-
+            href = urlparse.urljoin(url, str(h['href']))
             fname = fnameTemp.format(seq=nn)
             h['href'] = fname
 
@@ -113,9 +89,9 @@ class MyTask:
                 spage = MySoup(href, fname)
                 beef = spage.get(self.opt['selectorPage'])
                 spage.save(beef, fname, title)
-                ri = random.randint(1,100)/10.0
-                print 'sleep({:.1f})...'.format(ri)
-                time.sleep(ri)
+                sleep_time = random.randint(1,100)/10.0
+                print 'sleep({:.1f})...'.format(sleep_time)
+                time.sleep(sleep_time)
             nn += 1
 
         soup.save(itag, 'index.html', self.opt['title'])
@@ -209,36 +185,27 @@ class MySoup(BeautifulSoup):
 
         if 'include' in selector:
             sfi = selector['include']
+            incList = []
             if isinstance(sfi, unicode):
-                for i in tag.select(sfi):
-                    i['mybs'] = 1
+                incList.extend(tag.select(sfi))
             elif isinstance(sfi, list):
-                for f in sfi:
-                    for i in tag.select(f):
-                        i['mybs'] = 1
+                [ incList.extend(tag.select(f)) for f in sfi ]
             else:
                 raise Exception('unknown include')
-            itags = tag.select('[mybs]')
-            if len(itags) == 0:
+            if len(incList) == 0:
                 return None
-            elif len(itags) == 1:
-                tag = itags[0]
-                del tag['mybs']
+            elif len(incList) == 1:
+                tag = incList[0]
             else:
                 tag = self.new_tag('div')
-                for i in itags:
-                    del i['mybs']
-                    tag.append(i)
+                [tag.append(i) for i in incList]
 
         if 'exclude' in selector:
             sfx = selector['exclude']
             if isinstance(sfx, unicode):
-                for i in tag.select(sfx):
-                    i.extract()
+                [ i.extract() for i in tag.select(sfx) ]
             elif isinstance(sfx, list):
-                for x in sfx:
-                    for i in tag.select(x):
-                        i.extract()
+                [ i.extract() for x in sfx for i in tag.select(x) ]
             else:
                 raise Exception('unknown exclude')
 
@@ -261,9 +228,8 @@ class UrlTarget:
 
     def download(self):
         try:
-            f = urllib2.urlopen(self.url)
-            s = f.read()
-            f.close()
+            with urllib2.urlopen(self.url) as f:
+                s = f.read()
             with open(self.fname, 'w') as f:
                 f.write(s)
         except Exception, ex:
