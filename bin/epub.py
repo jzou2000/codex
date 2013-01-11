@@ -79,6 +79,28 @@ div#book-cover-author { font-size: 32px; margin: 1cm 0px; }
 div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
 #cover-image { position: relative; }
 #cover-image img { display: block; margin: 2px auto; -width: 96%; }
+
+#index {
+    position: fixed;
+    max-width: 50px;
+    max-height: 80%;
+    background: skyblue;
+    padding: 10px;
+    overflow: hidden;
+}
+#index>div { max-width: 1px; visibility: hidden; }
+#index:hover>div { max-width: none; visibility: visible; }
+#index:hover {
+    max-width: 40%;
+    overflow: auto;
+    border: thin solid black;
+}
+#index div.ci1 { margin-left: 0em; }
+#index div.ci2 { margin-left: 2em; }
+
+#content-wrapper {
+    margin-left: 50px;
+}
 '''
 
     # /index.html for browser (instead of epub)
@@ -90,16 +112,42 @@ div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
 <head>
   <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
   <title>{title}</title>
-  <link rel="stylesheet" href="style.css" type="text/css" />
+  <link rel="stylesheet" type="text/css" href="style.css" />
+  <!--<script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.3/jquery-ui.min.js"></script>-->
+  <script src="/lib/jquery.js"></script>
+  <script type="text/javascript">{js}
+  </script>
 </head>
 
 <body>
-<h1>{title}</h1>
-<ol>
-{content}
-</ol>
+<div id="index"> <div>{content}</div> </div>
+<div id="content-wrapper">
+  <h1>{title}</h1>
+  <div id="content"> </div>
+</div>
 </body>
 </html>
+'''
+
+    _T_JS = u'''
+$(document).ready(function() {
+    $('.ci').click(function() {
+        npage($(this).attr("src"))
+    });
+    $('.ci:first-of-type').click();
+});
+function npage(href)
+{
+    $.get(href, function(data) {
+            body = $('body', data);
+            body.find('[src]').each(function(){
+                src = $(this).attr('src');
+                $(this).attr('src', src);
+                });
+            $('#content').html(body).scrollTop();
+            }, 'xml');
+    $('#index').hide(100, function(){$(this).show(); });
+}
 '''
 
     # /META-INF/container.xml
@@ -199,7 +247,7 @@ div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
 '''
 
     def __init__(self, cfg):
-        # load configuration and defaults
+        ''' load configuration and defaults from a dict object '''
         self.src = cfg.setdefault('src')
         self.root = cfg.setdefault('root', 'epub')
         self.selector = cfg.setdefault('selector', 'div.htmlcontent') # safari
@@ -221,8 +269,9 @@ div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
 
         self.manifest = []
         self.toc = []
-        self.order = 1
+        self.order = 1              # seed of toc order, increase for each page
         self.uuid = uuid.uuid1()
+        self.has0 = False
 
         if self.dry: return
 
@@ -299,7 +348,7 @@ div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
         
     def parse(self, count = 0, pattern = '*.htm*', verbose = False):
         ''' parse html files in the source directory
-        count          first count files only (default for all files)
+        count          first <count> files only (default for all files)
         pattern        glob pattern
         '''
         if self.src is not None:
@@ -390,18 +439,22 @@ div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
             mime = self.defaultMime(href)
         Id = self.enId(Id, href)
         href = self.enHref(href)
-        uid = uuid.uuid1()      # uuid4() random            
-        self.toc.append({'idref': Id, 'text': text, 'href': href, 'uuid': uid, 'order': self.order })
+        uid = uuid.uuid1()      # uuid4() random
+        hn = self.hlevel(href) 
+        self.toc.append({'idref': Id, 'text': text, 'href': href, 'level': hn, 'uuid': uid, 'order': self.order })
         self.addManifest(href, Id, mime)
         self.order += 1
     
     def exportIndex(self, tocUUID=None):
         ''' export /index.html for browser '''
-        sa = [ u'  <li><a href="{0}">{1}</a></li>'.format(x['href'], x['text'])
+        try:
+            sa = [ u'<div class="ci ci{level}" src="{href}">{text}<div>'.format(**x)
                 for x in self.toc ]
-        si = u'\n'.join(sa)
-        with codecs.open(self.root + '/OEBPS/index.html', 'w', 'utf-8') as fp:
-            fp.write(EPub._T_index.format(title=self.title, content=si))
+            si = u'\n'.join(sa)
+            with codecs.open(self.root + '/OEBPS/index.html', 'w', 'utf-8') as fp:
+                fp.write(EPub._T_index.format(title=self.title, content=si, js=EPub._T_JS))
+        except Exception as ex:
+            print('Fail to export index.html: {0}, skipped'.format(ex))
 
     def exportTOC(self, tocUUID=None):
         ''' export /toc.ncx '''
@@ -419,7 +472,9 @@ div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
 
 
     def exportContent(self):
-        ''' export /content.opf '''
+        ''' export OEBPS/content.opf, which list/map all resources such as
+            xhtml, images, toc etc
+        '''
         with codecs.open(self.root + "/OEBPS/content.opf", "w", 'utf-8') as fp:
             ss = EPub._T_opf.format(uuid=self.uuid,
                 title=self.title, author=self.author, cover=self.cover)
@@ -465,9 +520,15 @@ div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
             return None
         
     def copyResFile(self, name, dst = 'Images'):
-        ''' Copy a file into resource folder /res, when filename
-        is duplicated, check the content. If the content is the same,
-        reuse that file, other wise a new name is generated with sequence appended.
+        ''' Copy a file into resource folder /res.
+        
+        If the resource name (filename) doesn't exist in the resource folder,
+        it is considered a new resource and is simply copied into the folder
+        without checking/comparing content (for performance purpose);
+        If the resource name exists in the folder already, the contents are
+        further compared. If the content is the same, reuse that file, other
+        wise a new name is generated with sequence appended.
+        
         Return: actual file name, duplicated
         '''
         bname = os.path.basename(name)
@@ -485,7 +546,7 @@ div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
         return rname, False
 
     def isSameContent(self, f1, f2):
-        ''' Compare content of two files.
+        ''' Compare (binary) content of two files.
         This is used to decide wheather to duplicate resource files.
         '''
         st1 = os.stat(f1)
@@ -514,6 +575,25 @@ div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
             if not os.path.exists(res + aname):
                 return aname
             n += 1            
+
+    def hlevel(self, name):
+        name = os.path.basename(name)
+        pattern = r'(\d+|[a-z])(\d{2})\.x?html$'
+        mat = re.match(pattern, name, re.I)
+        if mat:
+            si = mat.group(2)
+            if si == '00':
+                if not self.has0:
+                    self.has0 = True
+                return 1
+            elif self.has0:
+                return 2
+            elif si == '01':
+                return 1
+            else:
+                return 2
+        else:
+            return 0
 
 class MySoup(BeautifulSoup):
     '''
@@ -700,6 +780,13 @@ if __name__ == "__main__":
         --dry           dry run
 
         settings in json are overridden by command-line options
+
+        the most common launch method is
+
+        epub.py <source_folder>
+            where source_folder contains all pages, configure is
+            read from <source_folder>/epub.json and the output
+            is epub/
 '''
 
     def getConfig():
