@@ -1,0 +1,144 @@
+
+.taste
+.code
+from bs4 import BeautifulSoup
+with open('filename') as fp:
+    soup = BeautifulSoup(fp)
+tag = soup.a                       # first tag-a
+tag = soup.find(id='foo')
+for tag in soup.find_all('a'):     # iterate all tag-a
+    print tag.get('href')
+print soup.prettify()
+
+./code
+./taste
+
+.li
+install
+.code
+$ easy_install beautifulsoup4  # or
+$ pip install beautifulsoup4   # or
+$ python setup.py install      # from source tar-ball
+./code
+./li
+
+.li
+tag
+    soup = BeautifulSoup(file_or_string)
+    tag = soup.tag_name
+        tag.name
+        tag['attribute_name']
+        attr_list = tag.attrs
+
+tag.string
+NavigableString
+
+attributes as list
+css_soup = BeautifulSoup('<p class="body strikeout"></p>')
+css_soup.p['class']
+# ["body", "strikeout"]
+
+travaling the tree
+tag name
+  reach the first tag
+  soup.head
+  soup.body.b
+
+find_all('a')
+
+tag.contents
+tag.children
+ list of all direct children
+
+tag.descendants
+
+tag.string
+ the only child that is of type NavigableString
+
+tag.strings and tag.stripped_strings
+
+tag.parent
+tag.parents
+tag.next_sibling and tag.next_siblings
+tag.previous_sibling and tag.previous_siblings
+tag.next_element and tag.next_elements
+tag.previous_element and tag.previous_elements
+
+searching the tree
+tag.find_all(filter) and tag.find(filter)
+ Return a list of all descendants that match the filter, which can be:
+ find_all(name, attrs, recursive, text, limit, **kwargs)
+ find() simply returns the first element of find_all()
+ 
+ tagname
+   soup.find_all('b')
+   
+ regular expression
+   soup.find_all(re.compile('^b'))
+   
+ list
+    soup.find_all(['a', 'b'])
+    
+ True
+    soup.find_all(True)     # all descendants
+    
+ function
+    def has_class_but_no_id(tag):
+        return 'class' in tag and 'id' not in tag
+    soup.find_all(has_class_but_no_id)
+
+similar search in different directions
+find_parents() and find_parent()
+find_next_siblings() and find_next_sibling()
+find_previous_siblings() and find_previous_sibling()
+find_all_next() and find_next()
+find_all_previous() and find_previous()
+
+CSS selectors
+    Return a list of tags that follow CSS selector standard (subset)
+    soup.select('body a')
+    soup.select('.sister [class=~=some]')
+    soup.select('a[href]')
+    
+Modify the tree
+Change the tag
+    tag = soup.b
+    tag.name = 'blockquote'
+    tag['class'] = 'verybold'
+    del tag['id']
+    tag.string = 'happy new strig'
+new_tag = BeautifulSoup.new_tag(tag_name, **kwargs_attrs)
+tag.append(tag_or_string)
+tag.insert(index, tag_or_string)
+tag.insert_before(tag_or_string)
+tag.insert_after(tag_or_string)
+tag.clear()
+tag.extract()
+    remove the tag from its original tree and returns as a new root tag
+tag.decompose()
+    remove from the tree like extract(), then completely destroys the tag
+tag.replace_with(new_tag)
+tag.wrap(new_tag)
+    wrap tag into a new tag and return that new tag
+tag.unwrap()
+    unwrap the tag and put its content into its parent content
+
+Output
+tag.prettify()
+    return a nicely formatted (i.e. indented) unicode string
+    tag.prettify('latin-1')
+non-pretty printing
+    str(tag) or unicode(tag)
+tag.get_text(separator=None, strip=False)
+    Return a string of text part of a tag
+
+Encodings
+soup.original_encoding
+soup.p.encode('utf-8')
+Dammit
+inconsistent encodings
+
+
+
+
+
