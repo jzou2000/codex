@@ -50,7 +50,7 @@ function npage(href)
                 });
             $('#content').html(body).scrollTop();
             }, 'xml');
-    $('#index').hide(100, function(){$(this).show(); });
+    $('#index').hide(10).delay(200).show(10);
 }
 '''
     templCSS = u'''
