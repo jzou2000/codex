@@ -34,11 +34,17 @@ class EIndex(object):
 </html>
 '''
     templJS = u'''
+var i_pos = undefined;
 $(document).ready(function() {
     $('.ci').click(function() {
+        i_pos = $('#index>div').position();
         npage($(this).attr("src"))
     });
     $('.ci:first-of-type').click();
+    $('#index').hover(
+        function() { if (i_pos != undefined) $(this).scrollTop(0 - i_pos.top); },
+        function() {}
+    );
 });
 function npage(href)
 {
