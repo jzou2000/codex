@@ -1,0 +1,112 @@
+
+String
+len(s)
+'abc' + 'def'
+'abc' * 4
+sequence
+    for each_char in s:
+        print each_char
+    sub_str = s[3:-2]   # from 3 of left to 2 of right
+    s[::-1] # reverse the string
+str(an_object)
+ord('a')
+    TypeError on ord(s) if len(s) > 1
+string
+    new_str = string.expandtabs(s, tabsize=8)
+    index = s.find(sub, start=0[, end]) # -1 if failed
+    index = s.index(sub, start, end)    # raise ValueError if failed
+    words_list = s.split([sep = ' '[, max]])
+    long_string = s.join(words_list)
+    new_str = s.strip([chars])  # lstrip, rstrip
+    new_str = s.replace(old, new[, max])
+
+    
+    
+    
+
+List
+
+L = [ 123, 'abc', ]
+len(L)
+value = L[index]
+L[index] = new_value
+L[start:end]
+L + another_list
+    concatenate two lists to make a new list
+L * 3
+L.append(new_element)
+    append an element at end of the list
+L.extend(another_list)
+    append a list at end of the list
+L.pop(index)
+    remove index-th element from the list and return that element
+exception: IndexError
+    when index out of range in L[index]
+L.count(element)
+    count of element in the list
+del L[index]
+del L[slice]
+L.sort()
+L.reverse()
+comprehensions
+    new_list = [ expression(i) for i in L if condition ]
+
+
+Dictionary
+
+D = { 'a': 100, 20: 'a string', }
+    key can be any immutable value/object, including None
+D = dict(name='Bob', age=40)
+    another constructor
+
+value = D[key]
+D[key] = value
+value = D.get(key, default_value)
+    value = D[key] if key in D else default_value
+D.update(D2)
+    merge
+del D[key]
+    delete entries by key
+except: KeyError
+    when D[none_exist]
+
+iteration
+    for key in D:
+        print D[key]
+    key_list = D.keys()
+        equivalent to list(D)
+    value_list = D.values()
+    for k, v in D.items():
+        print k, '=>', v
+len(D)
+
+
+Tuple
+
+T = (1, 2, 3, 4)
+T + (5, 'a string')
+len(T)
+T[0] = 2
+    TypeError: tuples are immutable
+
+
+Set
+S = { 'a', 'b', 3, 3, 'a' }
+    duplications are mereged
+X & Y
+    intersection
+X | Y
+    union
+X - Y
+    difference
+
+
+
+
+Regular Expression
+re.search(pattern, string, flags=0)
+re.match(pattern, string, flags=0)
+re.split(pattern, string, maxsplit=0, flags=0)
+re.findall(pattern, string, flags=0)
+re.finditer(pattern, string, flags=0)
+re.sub(pattern, repl, string, count=0, flags=0)
