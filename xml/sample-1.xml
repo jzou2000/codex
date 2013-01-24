@@ -1,0 +1,17 @@
+<?xml version="1.0" ?>
+<root>
+    <a class="red color">
+        <b type="int" value="12">
+            weight
+        </b>
+        <b type="float" value="3.4">
+            height
+        </b>
+    </a>
+    <a class="blue color">
+        <c type="int" value="12">
+            weight
+        </c>
+    </a>
+</root>
+
