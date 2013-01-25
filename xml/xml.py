@@ -4,10 +4,9 @@
 
 import sys, os, os.path, re, codecs
 from lxml import etree
-#from bs4 import BeautifulSoup as BS
+from lxml.cssselect import CSSSelector
 
 class MyPage(object):
-    gbdec = codecs.getdecoder('gb18030')
     pattern_charset = re.compile(r'charset=(gb[-_0-9]+)', re.IGNORECASE)
     
     def __init__(self, fname):
@@ -18,12 +17,8 @@ class MyPage(object):
         match = MyPage.pattern_charset.search(self.raw_text)
         if match:
             self.encoding = match.group(1)
-            #print('encoding=%s' % self.encoding)
-            #v = MyPage.gbdec(self.raw_text)
-            #self.text = MyPage.pattern_charset.sub('charset=UTF-8', v[0], 1)
             v = unicode(self.raw_text, 'gb18030')
             self.text = MyPage.pattern_charset.sub('charset=UTF-8', v, 1)
-            #print unicode(self.text)
         else:
             self.text = self.raw_text
         self.root = etree.HTML(self.text)
@@ -81,7 +76,34 @@ class MyPage(object):
             return '\n'.join(a)
         else:
             return ''
+    
+    def strip_br(self, tag):
+        p = re.compile(r'<br\s*\/?>', re.I)
+        txt = p.split(etree.tounicode(tag, pretty_print=True))
+        for i,t in enumerate(txt):
+            t = t.strip()
+            n = len(t)
+            print '%d: %2d [%s]' % (i+1, n, t)
+        print 'common_width=%d' % common_width(txt)
+        return ''  #'\n'.join(txt)
 
+def common_width(txt):
+    tnc = {}
+    for t in txt:
+        n = len(t)
+        if n in tnc:
+            tnc[n] = tnc[n] + 1
+        else:
+            tnc[n] = 1
+        #print ' %d cnt=%d [%s]' % (n, tnc[n], t)
+    nmax = max(tnc.values())
+    #print 'common_width()=%d'%nmax
+    for t in tnc:
+        #print 'n=%d count=%d' % (t, tnc[t])
+        pass
+    for t in tnc:
+        if tnc[t] == nmax:
+            return t
 
 def get_arg(n, default):
     try:
@@ -89,20 +111,36 @@ def get_arg(n, default):
     except:
         return default
 
+def p0(page, c):
+    return page.show_tree(c)
+
+def p1(page, c):
+    return page.text_only(c)
+
+def p2(page, c):
+    return '%-40s %s' % (c.text.strip(), c.get('href'))
+
+def p3(page, c):
+    #return etree.tounicode(c, pretty_print=True)
+    #return p1(page,c)
+    return page.strip_br(c)
+
+testcase = [
+    [ 'ty.html',    '//td[@width="702"]/p[1]' , p1 ],
+    [ 'tyi.html',   '//td[@width="702"]//div[@align="center"]//a', p2 ],
+    [ 'sample-1.html', '//*[@id="body"]/p[@class="en"]', p3 ],
+    [ 'sample-1.html', '//*[@id="body"]/p[@class="cn"]', p3 ],
+]
+
 if __name__ == '__main__':
-    #fname = get_arg(1, 'ty.html')
-    #xpath = get_arg(2, '//td[@width="702"]/p[1]')
-    fname = get_arg(1, 'tyi.html')
-    xpath = get_arg(2, '//td[@width="702"]//div[@align="center"]//a')
+    tc = testcase[int(get_arg(1, 1)) - 1]
+    fname = tc[0]
+    xpath = tc[1]
     page = MyPage(fname)
     tags = page.xpath(xpath)
     if not tags:
         print 'Not found'
     else:
         for i,c in enumerate(tags):
-            #print '%s %d' % ('-'*40, i+1)
-            #print page.show_tree(c)
-            #print page.text_only(c)
-            print '%-40s %s' % (c.text.strip(), c.get('href'))
-#    result = page.tostring(tags[0], method='xml')
-#    print(result)
+            print '%s %d' % ('-'*40, i+1)
+            print tc[2](page, c)
