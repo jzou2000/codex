@@ -87,23 +87,71 @@ class MyPage(object):
         print 'common_width=%d' % common_width(txt)
         return ''  #'\n'.join(txt)
 
-def common_width(txt):
+def append_tag_string(txt_list, tag, with_tail=True, inline=False):
+    ''' Append a tag (as a text) to a list of text.
+        inline=True     append to the last line instead of appending as
+                        a new line
+    '''
+    if tag.text is None:
+        t = ''
+    else:
+        t = tag.text.strip()
+    if with_tail:
+        if tag.tail is not None:
+            t += tag.tail.strip()
+    if t:
+        if inline and txt_list:
+            txt_list[-1] += ' ' + t
+        else:
+            txt_list.append(t)
+    return t
+    
+def reflow_br(tag):
+    ''' Reflow a block of text (div or p or others) that are manually 
+        formatted by hard-coded <br/>. This is quite common in many
+        Chinese pages converted from text file.
+    '''
+    txt = []
+    append_tag_string(txt, tag, with_tail = False)
+    tag.text = None
+    for c in tag:
+        if c.tag == 'a':
+            append_tag_string(txt, tag, inline = True)
+        elif c.tag == 'br':
+            append_tag_string(txt, c)
+        tag.remove(c)
+    nw = most_common_width(txt)
+    para = []               # paragraphs
+    pt = ''                 # accumulatd text in the latest paragraph
+    for t in txt:
+        n = len(t)
+        if n < nw - 2:
+            para.append(pt + t)
+            pt = ''
+        else:
+            pt += t
+    if pt:
+        para.append(pt)
+    for p in para:
+        st = etree.SubElement(tag, 'p')
+        st.text = p
+    #tag.text = '\n'.join(txt)
+    #print etree.tounicode(tag, pretty_print=True)
+
+def most_common_width(txt):
+    ''' return the most common width in a list of strings '''
     tnc = {}
     for t in txt:
         n = len(t)
         if n in tnc:
-            tnc[n] = tnc[n] + 1
+            tnc[n] += 1
         else:
             tnc[n] = 1
-        #print ' %d cnt=%d [%s]' % (n, tnc[n], t)
-    nmax = max(tnc.values())
-    #print 'common_width()=%d'%nmax
-    for t in tnc:
-        #print 'n=%d count=%d' % (t, tnc[t])
-        pass
-    for t in tnc:
-        if tnc[t] == nmax:
-            return t
+    rn, rw = 0, 0
+    for t, w in tnc.items():
+        if w > rw:
+            rn, rw = t, w
+    return rn
 
 def get_arg(n, default):
     try:
@@ -123,7 +171,8 @@ def p2(page, c):
 def p3(page, c):
     #return etree.tounicode(c, pretty_print=True)
     #return p1(page,c)
-    return page.strip_br(c)
+    reflow_br(c)
+    return etree.tounicode(c, pretty_print=True)
 
 testcase = [
     [ 'ty.html',    '//td[@width="702"]/p[1]' , p1 ],
