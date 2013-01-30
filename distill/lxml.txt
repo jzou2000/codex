@@ -1,0 +1,60 @@
+
+from lxml import etree
+
+node = etree.Element('tag')
+root = etree.fromstring(some_xml_string)
+tree = etree.parse(file_or_filename)
+root = tree.getroot()
+tree = node.getroottree()
+child1 = node.append(etree.Element('child1'))
+child2 = etree.SubElement(node, 'child2') # alternative to above
+etree.tostring(node, pretty_print=True)
+    pretty_print=True
+    encoding=None
+    xml_declaration=False
+elements are lists
+    first_child = node[0]
+    len(node)   # number of children
+    for child in node:
+        print(child.tag)
+attributes
+    elem = etree.Element('tag', name='myname', interesting='totally')
+    etree.tostring(elem)    # <tag name="myname" interesting="totally" />
+    elem.get('interesting')
+    elem.set('something', 'new value')
+    attr_list = elem.attrib
+    elem.text = 'TEXT'  # <tag>TEXT</tag>
+    s = elem.tail       # <a>text</a>tail<next/>
+travel around the tree
+    elem.getparent()
+    elem.getprevious()
+    elem.getnext()
+    elem[i]         # i-th (direct) child
+find using XPath
+    result = elem.xpath(XPath)  # result type depends on XPath
+    tag_list = elem.xpath('//a[@class="some_class"]')
+
+
+
+
+text vs tail
+
+<root>hello<a>lxml<b>is</b>a<c/>powerful<d>lib</d>in</a>python</root>
+<root>
+    text: hello
+    1:<a>
+        text: lxml
+        tail: python
+        1:<b>
+            text: is
+            tail: a
+        2:<c>
+            tail: powerful
+        3:<d>
+            text: lib
+            tail: in
+    
+    
+    
+    
+

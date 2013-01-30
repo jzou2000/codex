@@ -38,6 +38,8 @@ L.append(new_element)
     append an element at end of the list
 L.extend(another_list)
     append a list at end of the list
+L.insert(index, element)
+    insert element before index-th
 L.pop(index)
     remove index-th element from the list and return that element
 exception: IndexError
