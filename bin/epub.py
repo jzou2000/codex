@@ -3,7 +3,9 @@
 
 import sys, os, os.path, stat, glob, getopt, codecs
 import re, shutil, uuid, json, zipfile
-from bs4 import BeautifulSoup
+import xml.sax.saxutils
+from lxml import etree
+from lxml import cssselect
 
 '''
 TODO - download epub cover from google, amazone and open library
@@ -41,31 +43,13 @@ Took 1.09672546387e-05 seconds
 ******************************************************************************** 
 '''
 
+pattern_newline = re.compile(r'\r?\n')
 
+# template strings for files
+#
+_T_mimetype = 'application/epub+zip'
 
-
-
-class EPub:
-    selector = "div.htmlcontent"
-    _mime = {                   # MIME table from file extension
-        '.jpeg':     'image/jpeg',
-        '.jpg':      'image/jpeg',
-        '.png':      'image/png',
-        '.bmp':      'image/bmp',
-        '.gif':      'image/gif',
-        '.svg':      'image/svg+xml',
-    
-        '.py':       'text/x-python',
-        '.html':     'application/xhtml+xml',
-        '.xhtml':    'application/xhtml+xml',
-        '.css':      'text/css'
-    }
-
-    # template strings for files
-    #
-    _T_mimetype = 'application/epub+zip'
-
-    _T_style = u'''body { background: white; margin: 1em 1em; }
+_T_style = u'''body { background: white; margin: 1em 1em; }
 pre {
   border-top: thin solid black;
   border-bottom: thin solid black;
@@ -77,6 +61,7 @@ div#book-cover-title { font-size: 64px; margin: 5cm 0px 1cm 0px; }
 div#book-cover-title2 { font-size: 18px; margin: 0px 0px 1cm 0px; }
 div#book-cover-author { font-size: 32px; margin: 1cm 0px; }
 div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
+p.reflow-br { text-indent: 2em; }
 #cover-image { position: relative; }
 #cover-image img { display: block; margin: 2px auto; -width: 96%; }
 
@@ -103,8 +88,8 @@ div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
 }
 '''
 
-    # /index.html for browser (instead of epub)
-    _T_index = u'''<?xml version="1.0" encoding="utf-8" standalone="no"?>
+# /index.html for browser (instead of epub)
+_T_index = u'''<?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
   "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 
@@ -115,8 +100,7 @@ div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
   <link rel="stylesheet" type="text/css" href="style.css" />
   <!--<script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.3/jquery-ui.min.js"></script>-->
   <script src="/lib/jquery.js"></script>
-  <script type="text/javascript">{js}
-  </script>
+  <script type="text/javascript">{js}</script>
 </head>
 
 <body>
@@ -128,8 +112,8 @@ div#book-cover-other { font-size: 16px; margin: 1cm 0px; }
 </body>
 </html>
 '''
-
-    _T_JS = u'''
+# javascripts contain {}, so they are not recommended to be in templates
+_T_JS = u'''
 $(document).ready(function() {
     $('.ci').click(function() {
         npage($(this).attr("src"))
@@ -150,8 +134,8 @@ function npage(href)
 }
 '''
 
-    # /META-INF/container.xml
-    _T_container_xml = u'''<?xml version="1.0" encoding="UTF-8"?>
+# /META-INF/container.xml
+_T_container_xml = u'''<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0"
            xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
     <rootfiles>
@@ -161,8 +145,8 @@ function npage(href)
 </container>
 '''
 
-    # head of content.opf, need close </package>
-    _T_opf = u'''<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+# head of content.opf, need close </package>
+_T_opf = u'''<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="uuid_id" version="2.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"
      xmlns:dcterms="http://purl.org/dc/terms/"
@@ -175,20 +159,20 @@ function npage(href)
     <meta name="cover" content="{cover}" />
   </metadata>
 '''
-    _T_opf_item = u'''    <item id="{Id}" href="{href}" media-type="{mime}" />
+_T_opf_item = u'''    <item id="{Id}" href="{href}" media-type="{mime}" />
 '''
-    _T_opf_itemref = u'''    <itemref idref="{idref}" />
+_T_opf_itemref = u'''    <itemref idref="{idref}" />
 '''
-    _T_opf_itemref_cover = u'''    <itemref idref="cover" linear="no" />
+_T_opf_itemref_cover = u'''    <itemref idref="cover" linear="no" />
 '''
 #    <itemref idref="normal-first-content" />
-    _T_opf_reference = u'''    <reference href="{href}" title="{title}" type="{type}" />
+_T_opf_reference = u'''    <reference href="{href}" title="{title}" type="{type}" />
 '''
 
 
 
-    # head of toc.ncx, need close </ncx>
-    _T_toc = u'''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+# head of toc.ncx, need close </ncx>
+_T_toc = u'''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1" xml:lang="eng">
   <head>
     <meta content="{uuid}" name="dtb:uid"/>
@@ -199,12 +183,12 @@ function npage(href)
 #    <meta content="0" name="dtb:totalPageCount"/>
 #    <meta content="0" name="dtb:maxPageNumber"/>
 
-    _T_toc_docTitle = u'''  <docTitle>
+_T_toc_docTitle = u'''  <docTitle>
     <text>{title}</text>
   </docTitle>
 '''
-    # replace UUID, TEXT, SRC
-    _T_toc_navPoint = u'''    <navPoint id="{uuid}" playOrder="{order}">
+# replace UUID, TEXT, SRC
+_T_toc_navPoint = u'''    <navPoint id="{uuid}" playOrder="{order}">
       <navLabel>
         <text>{text}</text>
       </navLabel>
@@ -214,13 +198,13 @@ function npage(href)
 
 
 
-    # template of xhtml for cover
-    _T_cover = u'''
+# template of xhtml for cover
+_T_cover = u'''
  <div id="cover-image">
    <img src="{cover}" />
  </div>
 '''
-    _T_cover_text = u'''
+_T_cover_text = u'''
  <div id="book-cover">
    <div id="book-cover-title">{title}</div>
    <div id="book-cover-title2">{title2}</div>
@@ -228,8 +212,8 @@ function npage(href)
    <div id="book-cover-other">{other}</div>
  </div>
 '''
-    # template of xhtml, replace title, content
-    _T_xhtml = u'''<?xml version="1.0" encoding="utf-8" standalone="no"?>
+# template of xhtml, replace title, content
+_T_xhtml = u'''<?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
   "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 
@@ -246,34 +230,40 @@ function npage(href)
 </html>
 '''
 
+
+
+class EPub:
+    selector = "div.htmlcontent"
+    _mime = {                   # MIME table from file extension
+        '.jpeg':     'image/jpeg',
+        '.jpg':      'image/jpeg',
+        '.png':      'image/png',
+        '.bmp':      'image/bmp',
+        '.gif':      'image/gif',
+        '.svg':      'image/svg+xml',
+    
+        '.py':       'text/x-python',
+        '.html':     'application/xhtml+xml',
+        '.xhtml':    'application/xhtml+xml',
+        '.css':      'text/css'
+    }
+
+
     def __init__(self, cfg):
-        ''' load configuration and defaults from a dict object '''
-        self.src = cfg.setdefault('src')
-        self.root = cfg.setdefault('root', 'epub')
-        self.selector = cfg.setdefault('selector', 'div.htmlcontent') # safari
-        self.unwrap = cfg.setdefault('unwrap', False)
-        self.title = unicode(cfg.setdefault('title', 'Unknown'))
-        self.author = unicode(cfg.setdefault('author', 'Unknown'))
-        self.cover = cfg.setdefault('cover')
-        self.epub = cfg.setdefault('epub')
-        self.encode = cfg.setdefault('encode', 'utf-8')
-        self.dry = cfg.setdefault('dry')
-        self.count = cfg.setdefault('count', 0)
-        self.title2 = cfg.setdefault('title2', '')
-        self.other = cfg.setdefault('other', '')
-        strip = cfg.setdefault('strip')
-        if strip is None:
-            self.strip = None
-        else:
-            self.strip = re.split(r'\s+', strip)
+        ''' Load configuration, setup directory structures for output
+            and build data structures
+        '''
+        self.cfg = cfg
+        self.root = cfg.get('root')
+        self.src = cfg.get('src')
+        self.title = cfg.get('title', 'Unknown')
+        self.author = cfg.get('author', 'Unknown')
 
         self.manifest = []
         self.toc = []
         self.order = 1              # seed of toc order, increase for each page
         self.uuid = uuid.uuid1()
         self.has0 = False
-
-        if self.dry: return
 
         # setup directory structure
         try:
@@ -283,108 +273,111 @@ function npage(href)
             os.makedirs(self.root)
         except OSError as e: pass
         try:
-            os.makedirs(self.root + "/META-INF")
+            os.makedirs(self.root + '/META-INF')
         except OSError as e: pass
         try:
-            os.makedirs(self.root + "/OEBPS/Images")
+            os.makedirs(self.root + '/OEBPS/Images')
         except OSError as e: pass
 
         # create intrinsic files
         fname = self.root + '/META-INF/container.xml'
         with codecs.open(fname, 'w', 'utf-8') as f:
-            f.write(EPub._T_container_xml)
+            f.write(_T_container_xml)
         fname = self.root + '/mimetype'
         with codecs.open(fname, 'w', 'utf-8') as f:
-            f.write(EPub._T_mimetype)
+            f.write(_T_mimetype)
         fname = self.root + '/OEBPS/style.css'        
         with codecs.open(fname, 'w', 'utf-8') as f:
-            f.write(EPub._T_style)
+            f.write(_T_style)
 
         # process cover
-        if not self.cover:
+        cover = self.cfg['cover']
+        if not cover:
             # not defined in configuration/command-line, search file pattern
             try:
                 cpat = 'cover.*'
                 if self.src is not None:
                     cpat = self.src + "/" + cpat
-                cover = glob.glob(cpat)
-                self.cover = cover[0]
+                cover = glob.glob(cpat)[0]
             except: pass
-        if self.cover:
+        if cover:
             # check file exists and has mime
             # if only the file name is given and it is not in cwd,
             # check in src as well
-            if not os.path.exists(self.cover):
-                if os.path.dirname(self.cover) is None and self.src is not None:
-                    self.cover = os.path.join(self.src, self.cover)
-            if os.path.exists(self.cover):
-                if not self.defaultMime(os.path.basename(self.cover)):
-                    self.cover = None
+            if not os.path.exists(cover):
+                if os.path.dirname(cover) is None and self.src is not None:
+                    cover = os.path.join(self.src, cover)
+            if os.path.exists(cover):
+                if not self.defaultMime(os.path.basename(cover)):
+                    cover = None
             else:
-                self.cover = None
-        if self.cover:
+                cover = None
+        if cover:
             # copy the image file and generate cover page
-            img,isDup = self.copyResFile(self.cover)
+            img,isDup = self.copyResFile(cover)
             if not isDup:
                 self.addManifest(img, Id='cover-image')
             rname = '{0}/OEBPS/cover.xhtml'.format(self.root)
             with codecs.open(rname, 'w', 'utf-8') as fp:
-                sc = EPub._T_cover.format(cover=unicode(img))
-                fp.write(EPub._T_xhtml.format(title=u'Cover', content=sc))
+                sc = _T_cover.format(cover=unicode(img))
+                fp.write(_T_xhtml.format(title=u'Cover', content=sc))
             self.addTOC(href=u'cover.xhtml', Id=u'cover', text=u'Cover')
         else:
             # no cover image available, create a text page that
             # contains title and author
             rname = '{0}/OEBPS/cover.xhtml'.format(self.root)
             with codecs.open(rname, 'w', 'utf-8') as fp:
-                sc = EPub._T_cover_text.format(
-                       title=unicode(self.title),
-                       title2=unicode(self.title2),
-                       author=unicode(self.author),
-                       other=unicode(self.other))
-                fp.write(EPub._T_xhtml.format(title=u'Cover', content=sc))
-            self.addTOC(href=u'cover.xhtml', Id=u'cover', text=u'Cover')
+                sc = _T_cover_text.format(
+                       title=self.title,
+                       title2=self.cfg['title2'],
+                       author=self.author,
+                       other=self.cfg['other'])
+                fp.write(_T_xhtml.format(title='Cover', content=sc))
+            self.addTOC(href='cover.xhtml', Id='cover', text='Cover')
 
         
-    def parse(self, count = 0, pattern = '*.htm*', verbose = False):
+    def parse(self, count = None, pattern = '*.htm*', verbose = False):
         ''' parse html files in the source directory
-        count          first <count> files only (default for all files)
-        pattern        glob pattern
+                count     first <count> files only (default for all)
+                pattern   glob pattern
         '''
         if self.src is not None:
             pattern = self.src + "/" + pattern
         flist = glob.glob(pattern)
         flist.sort()
-        if count == 0 and self.count > 0:
-            count = self.count
-        count = int(count)
-        if count > 0:
-            flist = flist[:count]
+        if count is None and self.cfg['count'] > 0:
+            count = self.cfg['count']
+        if count is not None:
+            count = int(count)
+            if count > 0:
+                flist = flist[:count]
+        if verbose:
+            self.dump_xpath()
         for f in flist:
+            # parse all (html) files, but skip index.(x)htm(l)
             if re.search(r'index.*\.x?html?$', f, flags=re.I):
                 continue
             self.parsePage(f)
             if verbose: print f
-        self.addManifest(u"style.css", u"style.css", u"text/css")
+        self.addManifest('style.css', 'style.css', 'text/css')
         self.exportContent()
         self.exportTOC()
         self.exportIndex()
         
+
     def zip(self):
         ''' zip everything under root to create a epub file '''
-        if self.epub:
-            zfname = unicode(self.epub)
+        if self.cfg['epub']:
+            zfname = unicode(self.cfg['epub'])
         else:   # not specified, use the name of source directory
-            src = self.src if self.src else os.getcwd()
+            src = self.src
+            if src is None or src == '.':
+                src = os.getcwd()
             src = os.path.basename(src)
             zfname = u'{0}.epub'.format(src)
-            self.epub = zfname
-        if self.dry:
-            print u'create zip {0}'.format(zfname)
-            return
-
+            self.cfg['epub'] = zfname
         zf = zipfile.ZipFile(zfname, 'w', zipfile.ZIP_DEFLATED)
-        path = self.root
+        path = self.root    # root of epub structure, ./epub by default
         for root, dirs, files in os.walk(path):
             for f in files:
                 rf = os.path.join(root, f)      # real file name
@@ -392,38 +385,41 @@ function npage(href)
                 zf.write(rf, af)
         zf.close()
 
+
     def parsePage(self, fname):
         ''' parse a page, copy/convert img files, extract mainContent
         into xhtml, add into manifester and toc list'''
         print "parsePage: " + fname
-        soup = MySoup(fname, self.encode, self.selector)
-        soup.extractInPageAnchors()
-        soup.cleanPage(self.strip)
+        page = MyPage(fname, self.cfg)
+        page.cleanPage()
         # copy all images into /OEBPS/Images
-        for c in soup.images():
+        for c in page.images():
             try:
-                fimg = c['src']
+                fimg = c.get('src')
                 if re.match(r'http://.*', fimg):
-                    c.extract()
+                    page.remove(c)
                     continue
                 if self.src is not None:
                     fimg = os.path.join(self.src, fimg)
                 nf,isDup = self.copyResFile(fimg)
                 if not isDup:
                     self.addManifest(nf)
-                if fimg != nf: c['src'] = nf
+                if fimg != nf: c.set('src', nf)
             except Exception as (e):
                 print 'parsePage.img ({0} - {1}): {2}'.format(fname, fimg, e)
         rname = os.path.splitext(os.path.basename(fname))[0] + ".xhtml"
-        title = soup.title()
+        title = page.title()
+        if title:
+            title = xml.sax.saxutils.escape(title)
         try:
             with codecs.open(u"{0}/OEBPS/{1}".format(self.root, rname), "w", 'utf-8') as fp:
-                c = soup.output(selector=self.selector, unwrap=self.unwrap)
-                txt = EPub._T_xhtml.format(title=title, content=c)
+                c = page.output(reflow=self.cfg['reflow'])
+                txt = _T_xhtml.format(title=title, content=c)
                 fp.write(txt)
         except Exception as ex:
-            print "parsePage: ", ex
+            print "parsePage error: ", ex
         self.addTOC(unicode(rname), text=title)
+
 
     def addManifest(self, href, Id=None, mime=None):
         ''' add an item in manifest list '''
@@ -433,6 +429,7 @@ function npage(href)
         href = self.enHref(href)
         self.manifest.append({'href': href, 'Id': Id, 'mime': mime })
     
+
     def addTOC(self, href, text=None, Id=None, mime=None):
         ''' add an item in TOC list '''
         if mime is None:
@@ -441,31 +438,36 @@ function npage(href)
         href = self.enHref(href)
         uid = uuid.uuid1()      # uuid4() random
         hn = self.hlevel(href) 
-        self.toc.append({'idref': Id, 'text': text, 'href': href, 'level': hn, 'uuid': uid, 'order': self.order })
+        self.toc.append({'idref': Id, 'text': text,
+                'href': href, 'level': hn, 'uuid': uid, 'order': self.order })
         self.addManifest(href, Id, mime)
         self.order += 1
     
+
     def exportIndex(self, tocUUID=None):
-        ''' export /index.html for browser '''
+        ''' Export /index.html, which is not used by epub but used by browsing
+            when expanded.
+        '''
         try:
             sa = [ u'<div class="ci ci{level}" src="{href}">{text}<div>'.format(**x)
                 for x in self.toc ]
             si = u'\n'.join(sa)
             with codecs.open(self.root + '/OEBPS/index.html', 'w', 'utf-8') as fp:
-                fp.write(EPub._T_index.format(title=self.title, content=si, js=EPub._T_JS))
+                fp.write(_T_index.format(title=self.cfg['title'], content=si, js=_T_JS))
         except Exception as ex:
             print('Fail to export index.html: {0}, skipped'.format(ex))
+
 
     def exportTOC(self, tocUUID=None):
         ''' export /toc.ncx '''
         with codecs.open(self.root + "/OEBPS/toc.ncx", "w", 'utf-8') as fp:
-            fp.write(EPub._T_toc.format(uuid=self.uuid))
+            fp.write(_T_toc.format(uuid=self.uuid))
 
-            fp.write(EPub._T_toc_docTitle.format(title=self.title))
+            fp.write(_T_toc_docTitle.format(title=self.title))
             
             fp.write(u"  <navMap>\n")
             for s in self.toc:
-                fp.write(EPub._T_toc_navPoint.format(**s))
+                fp.write(_T_toc_navPoint.format(**s))
             fp.write(u"  </navMap>\n")
 
             fp.write(u"</ncx>\n")
@@ -476,25 +478,25 @@ function npage(href)
             xhtml, images, toc etc
         '''
         with codecs.open(self.root + "/OEBPS/content.opf", "w", 'utf-8') as fp:
-            ss = EPub._T_opf.format(uuid=self.uuid,
-                title=self.title, author=self.author, cover=self.cover)
+            ss = _T_opf.format(uuid=self.uuid,
+                title=self.title, author=self.author, cover=self.cfg['cover'])
             fp.write(ss)
             
             fp.write(u"  <manifest>\n")
-            fp.write(EPub._T_opf_item.format(Id=u'ncx',
+            fp.write(_T_opf_item.format(Id=u'ncx',
                 href=u'toc.ncx', mime=u'application/x-dtbncx+xml'))
             for s in self.manifest:
-                fp.write(EPub._T_opf_item.format(**s))
+                fp.write(_T_opf_item.format(**s))
             fp.write(u"  </manifest>\n")
             
             fp.write(u"  <spine toc=\"ncx\">\n")
             for s in self.toc:
-                fp.write(EPub._T_opf_itemref.format(**s))
+                fp.write(_T_opf_itemref.format(**s))
             fp.write(u"  </spine>\n")
             
-            if self.cover is not None:
+            if self.cfg['cover'] is not None:
                 fp.write(u"    <guide>\n")
-                fp.write(EPub._T_opf_reference.format(type=u'cover',
+                fp.write(_T_opf_reference.format(type=u'cover',
                     title=u'Cover', href=u'cover.xthml'))
                 fp.write(u"    </guide>\n")
 
@@ -502,23 +504,26 @@ function npage(href)
 
 
     def enHref(self, href):
-        '''encode href by converting space( ) into %20'''
+        ''' encode href by converting space( ) into %20'''
         return re.sub(u' ', u'%20', href)            
-        
+
+
     def enId(self, Id, href=None):
-        '''encode id by converting space( ) into dash(-)'''
+        ''' encode id by converting space( ) into dash(-)'''
         if Id is None:
             Id = re.sub(ur'^.*\/', u'', href)
         return re.sub(u' ', u'-', Id)
-    
+
+
     def defaultMime(self, fname):
-        '''get MIME from file name (extension)'''
+        ''' get MIME from file name (extension)'''
         try:
             ext = os.path.splitext(os.path.basename(fname))[1]
             return unicode(EPub._mime[ext])
         except:
             return None
-        
+
+
     def copyResFile(self, name, dst = 'Images'):
         ''' Copy a file into resource folder /res.
         
@@ -545,6 +550,7 @@ function npage(href)
             print 'copyResFile ({0} --> {1}): {2}'.format(name, dst, ex)
         return rname, False
 
+
     def isSameContent(self, f1, f2):
         ''' Compare (binary) content of two files.
         This is used to decide wheather to duplicate resource files.
@@ -562,6 +568,7 @@ function npage(href)
         else:
             return False
 
+
     def getAlternativeName(self, f, dst = 'Images'):
         ''' Get an alternative name when two files conflict in names in /res folder.
         The solution is to add sequence number in basename.
@@ -576,7 +583,9 @@ function npage(href)
                 return aname
             n += 1            
 
+
     def hlevel(self, name):
+        ''' get <hn> level (n=1,2,...etc) according to filename pattern '''
         name = os.path.basename(name)
         pattern = r'(\d+|[a-z])(\d{2})\.x?html$'
         mat = re.match(pattern, name, re.I)
@@ -595,297 +604,444 @@ function npage(href)
         else:
             return 0
 
-class MySoup(BeautifulSoup):
-    '''
-    Extract content from downloaded html files, using BeautifulSoup
-    '''
-    def __init__(self, src, encode = 'utf-8', selector = None):
-        if os.path.exists(src):
-            with codecs.open(src, 'r', encode) as fp:
-                BeautifulSoup.__init__(self, fp)
-            self.filename = src
-            self.sourceString = None
+
+    def dump_xpath(self):
+        xpath = self.cfg.get('xpath')
+        if xpath is None:
+            print 'Xpath is None'
+        elif isinstance(xpath, str) or isinstance(xpath, unicode):
+            print 'Xpath=%s' % xpath
+        elif isinstance(xpath, list):
+            print 'Xpath is a list'
+            for i in xpath:
+                print '    ', i
         else:
-            BeautifulSoup.__init__(self, src)
-            self.filename = None
-            self.sourceString = src
-        self.selector = selector
-        c = self.select(selector)
-        if c:
-            self.mainContent = c[0]
+            print 'Xpath unknown'
+
+
+class MyPage(object):
+    '''
+    Extract content from downloaded html files, using lxml and various
+    filters.
+    '''
+    pattern_charset = re.compile(r'charset=([-_0-9a-z]+)', re.IGNORECASE)
+    pattern_gb = re.compile(r'gb[-_0-9]+$', re.IGNORECASE)
+    h_all = '|'.join(['.//h%d' % i for i in range(1,10)])
+
+    def __init__(self, src, cfg):
+        ''' Load html file using lxml.etree. Because lxml doesn't handle
+            encoding well enough, detect charset="encoding" first.
+            The content is converted into unicode.
+            
+            cfg:
+            encoding    used unless charset is defined in html
+            xpath       string or list define filter(s)
+            unwrap      unwrap filter tags
+        '''
+        self.fname = src
+        with open(self.fname) as fp:
+            self.raw_text = fp.read()
+        match = MyPage.pattern_charset.search(self.raw_text)
+        if match:
+            self.encoding = match.group(1)
         else:
-            self.mainContent = self.body
-        self.img = []
-        self.styles = [ c.get('href')
-            for c in self.find_all('meta', rel= 'stylesheet') ]
-    
+            self.encoding = cfg.get('encoding')
+        encoding = self.encoding
+        if encoding is None:
+            self.text = unicode(self.raw_text)
+        else:
+            if MyPage.pattern_gb.match(encoding):
+                encoding = 'gb18030'    # superset of all GB encodings
+            v = unicode(self.raw_text, encoding)
+            self.text = MyPage.pattern_charset.sub('charset=UTF-8', v, 1)
+        self.text = re.sub(ur'\r\n', u'\n', self.text)
+        self.root = etree.HTML(self.text)
+        body = self.root.xpath('//body')[0]
+        self.mypage = etree.Element('div', id='__mypage__')
+        nselected = 0
+        xpath = cfg.get('xpath')
+        unwrap = cfg.get('unwrap', True)
+        if xpath is None:
+            self.mypath = body
+        elif isinstance(xpath, str) or isinstance(xpath, unicode):
+            # xpath is a string
+            for t in self.root.xpath(xpath):
+                self.moveto(t, self.mypage, unwrap=unwrap)
+                nselected += 1
+                #print etree.tostring(self.mypage, encoding='utf8')
+        elif isinstance(xpath, list):
+            # xpath is a list of strings, those start with '-' for stripping
+            add_list = []
+            remove_list = []
+            for s in xpath:
+                if s[0] == '-':
+                    remove_list.append(s[1:])
+                else:
+                    add_list.append(s)
+            for p in add_list:
+                for t in self.root.xpath(p):
+                    for rp in remove_list:
+                        for r in t.xpath(rp):
+                            self.remove(r)
+                    self.moveto(t, self.mypage, unwrap=unwrap)
+                    nselected += 1
+        else:
+            raise Exception('unknown xpath')
+        if cfg.get('dumpload'):
+            dumptag(self.mypage)
+        if nselected == 0:
+            raise Exception('nothing selected')
+
+
     def images(self):
         ''' list all <img> in mainContent'''
-        return self.mainContent.find_all('img')
-    
-    def title(self):
-        ''' return title of the page if exists'''
+        return self.mypage.xpath('.//img')
+
+
+    def title(self, by_level=False):
+        ''' return title of the page if exists
+            by_level    True: find h1, else h2, else h3 and so on
+                        False: find first h1/2/3 what ever
+        '''
         try:
-            # get first head, what ever
-            t = self.mainContent.find(re.compile(r'^h\d'))
-            if t:
-                return unicode(t.get_text())
-            # -- alternate: get 1st h1, else 1st h2, else 1st h3
-            # t = (self.mainContent.h1 or
-            #        self.mainContent.h2 or self.mainContent.h3)
-            # if len(t) > 0:
-            #     return str(' '.join(t.stripped_strings))
-            s = unicode(self.head.title.string)
-            s = re.sub(ur'.*>\s*', u'', s)
-            return s
+            if by_level:
+                for i in range(1,10):
+                    h = self.mypage.xpath('.//h%d' % i)
+                    if h: return h[0].text
+            else:
+                # get first head, what ever
+                h = self.mypage.xpath(MyPage.h_all)
+                if h: return h[0].text
+            txt = tag2text(self.mypage)
+            if txt:
+                for i, t in enumerate(pattern_newline.split(txt)):
+                    #print '%s(%d): [%s]' % (self.fname, i, t)
+                    tt = t.strip()
+                    if tt:
+                        return tt
+                    if i > 10: break
+            return ''
         except Exception as ex:
-            print 'MySoup.title:', ex
-            return None
-    
-    def extractInPageAnchors(self, pattern=None):
-        anchors = self.mainContent.select('a[name]')
-        if pattern is None:
-            pattern = r'^sec'
-        for c in anchors:
-            try:
-                name = c['name']
-                if re.match(pattern, name): pass
-                elif c.string is None or c.tag == '':
-                    c.extract()
-            except: pass
-        
-    def cleanPage(self, strip):
-        ''' clean page '''
-        # clean class/id for h1, h2, ...
-        for h in self.mainContent.find_all(re.compile(r'^h\d')):
-            if 'class' in h: del h['class']
-            if 'id' in h: del h['id']
-        # clean onclick/class for anchors
-        for a in self.mainContent.select('a[onclick]'):
-            del a['onclick']
-        for a in self.mainContent.select('a[class]'):
-            del a['class']
-        # decompose hidden inputs
-        for h in self.mainContent.select('input[type="hidden"]'):
-            h.decompose()
-        # decompose script
-        for h in self.mainContent.select('script'):
-            h.decompose()
-        # decompose iframe
-        for h in self.mainContent.select('iframe'):
-            h.decompose()
-        # unwrap font
-        for h in self.mainContent.select('font'):
-            h.unwrap()
-        # unwrap tables that have only one <td> for "boxed" (safari)
-        for t in self.mainContent.select('table'):
-            tds = t.select('td')
-            if len(tds) == 1:
-                tag = tds[0]
-                tag.name = 'div'
-                tag['class'] = 'box'
-                t.replace_with(tag)
-        # decompose "Code View: Scroll/Show All" (safari)
-        for h in self.mainContent.select('div.codeSegmentsExpansionLinks'):
-            h.decompose()
-        # decompose comment container (O'Reilly)
-        for h in self.mainContent.select('div.comment_container'):
-            h.decompose()
-
-        # run strip list
-        if strip:
-            if self.selector:
-                tag = self.select(self.selector)
-                if not tag: return
-                tag = tag[0]
-            else:
-                tag = self.mainContent
-            for strip_tag in strip:
-                esc_tag = re.sub(r'__', ' ', strip_tag)
-                for st in tag.select(esc_tag):
-                    st.extract()
-
-        
-    def output(self, prettify=False, selector=None, unwrap=False):
-        try:
-            if selector:
-                mo = re.match(r'tianya-?(.*)', selector)
-                if mo is not None:
-                    return self.tianya(mo.group(1))
-                else:
-                    tag = self.select(selector)
-                    if not tag: return
-                    tag = tag[0]
-            else:
-                tag = self.mainContent 
-
-            # extract anchors
-            for a in self.mainContent.select('a[href]'):
-                a.unwrap()
-            if unwrap:
-                tag.name = 'div'
-                for a in [ x for x in tag.attrs ]:
-                    if a != 'class':
-                        del tag[a]
-
-            if prettify:
-                return unicode(tag.prettify())
-            else:
-                return unicode(tag)
-        except Exception as ex:
-            print "Exception(MySoup.output):", ex
+            print 'MyPage.title:', ex
             return ''
 
-    def tianya(self, mode=None):
-        if mode:
-            tag = self.find_all('td')[1]
+    
+    def t_append(self, f, t):
+        ''' convenient function for f+t, None is treated as "" '''
+        if t:
+            if f:
+                f += t
+            else:
+                f = t
+        return f
+
+
+    def unwrap(self, tag):
+        ''' unwrap a node tag
+        '''
+        pa = tag.getparent()
+        i = 0
+        for t in pa:           # find the index of tag in parent
+            if tag is t:
+                break
+            i += 1
+        if tag.text:
+            if i == 0:
+                pa.text = self.t_append(pa.text, tag.text)
+            else:
+                p = pa[i - 1]
+                p.tail = self.t_append(p.tail, tag.text)
+        for t in tag:
+            pa.insert(i, t)
+            i += 1
+        if tag.tail:
+            if i == 0:
+                pa.text = self.t_append(pa.text, tag.tail)
+            else:
+                p = pa[i-1]
+                p.tail = self.t_append(p.tail, tag.tail)
+        pa.remove(tag)
+
+
+    def unwrap_text(self, tag, pretty=True, encoding='unicode'):
+        ''' Return text that is print without tag itself
+        '''
+        text = []
+        if tag.text:
+            text.append(tag.text)
+        for t in tag:
+            text.append(etree.tostring(t, pretty_print=pretty, encoding=encoding))
+        return ''.join(text)
+
+
+    def remove(self, tag):
+        ''' Remove a tag (and all its descendants) from the tree. '''
+        parent = tag.getparent()
+        if parent:
+            parent.remove(tag)
+
+
+    def moveto(self, tag, parent, index=-1, unwrap = False):
+        ''' Move tag from its original place to parent
+            unwrap the tag if unwrap = True
+            index < 0 means append
+        '''
+        n = len(parent)
+        if index >= 0 and index < n:
+            parent.insert(index, tag)
         else:
-            tag = self.find_all('td')[1]
-        for s in tag.find_all(['div', 'p', 'a']):
-            s.extract()
-        for s in tag.find_all(['center', 'font']):
-            s.unwrap()
+            parent.append(tag)
+        if unwrap:
+            self.unwrap(tag)
+
+
+    def cleanPage(self):
+        ''' clean page '''
+        # Unwrap all in-page anchors, which has attribute "name" for
+        #    navigating in page, i.e. href=page#name
+        skip = None     # todo?
+        if skip:
+            pattern = re.compile(skip)
+        for a in self.mypage.xpath('.//a[@name]'):
+            name = a.get('name', '')
+            if not (skip and pattern.match(name)):
+                self.unwrap(a)
+        # clean class/id for h1, h2, ...
+        for t in self.mypage.xpath(MyPage.h_all):
+            att = t.attrib
+            if 'class' in att: del att['class']
+            if 'id' in att: del att['id']
+        # clean onclick/class for anchors
+        for t in self.mypage.xpath('.//a[@onclick]'):
+            del t.attrib['onclick']
+        for t in self.mypage.xpath('.//a[@class]'):
+            del t.attrib['class']
+        # remove hidden inputs, script, iframe
+        for t in self.mypage.xpath('.//input[@type="hidden"] | .//script | .//iframe'):
+            self.remove(t)
+        # unwrap font
+        for t in self.mypage.xpath('.//font'):
+            self.unwrap(t)
+        # unwrap tables that have only one <td> for "boxed" (safari)
+        for t in self.mypage.xpath('.//table'):
+            tds = t.xpath('.//td')
+            if len(tds) == 1:
+                td = tds[0]
+                p = t.getparent()
+                if p:
+                    p.replace(t, td)
+                    self.unwrap(td)
+        # remove "Code View: Scroll/Show All" (safari)
+        cs = cssselect.CSSSelector('div.codeSegmentsExpansionLinks')
+        for t in cs(self.mypage):
+            self.remove(t)
+        # remove comment container (O'Reilly)
+        cs = cssselect.CSSSelector('div.comment_container')
+        for t in cs(self.mypage):
+            self.remove(t)
+
+
+    def output(self, prettify=True, reflow=False):
+        ''' Output mypage into a (unicode) string '''
         try:
-            ps = []
-            for s in tag.stripped_strings:
-                if s in [u'下一页', u'上一页', u'后一页', u'前一页', u'回目录', u'回首页']:
-                    continue
-                ps.append(u'<p>{0}</p>\n'.format(s))
-            return unicode(u''.join(ps))
+            for a in self.mypage.xpath('//a[@href]'):
+                self.unwrap(a)
+            if reflow:
+                reflow_br(self.mypage)
+                prettify = True
+            return self.unwrap_text(self.mypage, pretty = prettify)
         except Exception as ex:
-            print('tianya:', ex)
+            print "Exception(MyPage.output):", ex
+            return ''
+
+
+def most_common_width(txt):
+    ''' return the most common width in a list of strings '''
+    tnc = {}
+    for t in txt:
+        if t is None: continue      # don't count blank lines
+        n = len(t.strip())
+        if n == 0: continue         # don't count blank lines
+        if n in tnc:
+            tnc[n] += 1
+        else:
+            tnc[n] = 1
+    rn, rw = 0, 0
+    for t, w in tnc.items():
+        if w > rw:
+            rn, rw = t, w
+    return rn
+
+
+def append_tag_string(txt_list, tag, with_tail=True, inline=False):
+    ''' Append a tag (as a text) to a list of text.
+        inline=True     append to the last line instead of appending as
+                        a new line
+    '''
+    if tag.text is None:
+        t = ''
+    else:
+        t = tag.text.strip()
+    if with_tail:
+        if tag.tail is not None:
+            t += tag.tail.strip()
+    if t:
+        if inline and txt_list:
+            txt_list[-1] += ' ' + t
+        else:
+            txt_list.extend(pattern_newline.split(t))
+    return t
+
+
+def reflow_br(tag):
+    ''' Reflow a block of text (div or p or others) that are manually 
+        formatted by hard-coded <br/>. This is quite common in many
+        Chinese pages converted from text file.
+    '''
+    txt = []
+    append_tag_string(txt, tag, with_tail = False)
+    tag.text = None
+    for c in tag:
+        if c.tag == 'a':
+            append_tag_string(txt, tag, inline = True)
+        elif c.tag == 'br':
+            append_tag_string(txt, c)
+        tag.remove(c)
+    nw = most_common_width(txt)
+    paragraphs = []
+    latest_para = ''
+    for t in txt:
+        n = len(t) if t is not None else 0
+        if n < nw - 2:
+            paragraphs.append(latest_para + t)
+            latest_para = ''
+        else:
+            latest_para += t
+    if latest_para:
+        paragraphs.append(latest_para)
+    for p in paragraphs:
+        st = etree.SubElement(tag, 'p', {'class': 'reflow-br'})
+        st.text = p
+
+
+def tag2text(tag, withtail = False):
+    ''' Remove tags and leave text only.
+        This function applies recursive to the whole sub-tree.
+        New lines are added before and after block-display tags.
+    '''
+    if tag is None:
+        return u''
+    a = []
+    if tag.tag in [ 'div', 'p', 'br', 'table', 'ul', 'ol' ]:
+        a.append(u'\n')
+    if tag.text:
+        a.append(tag.text)
+    for c in tag:
+        cs = tag2text(c, True)
+        if cs:
+            a.append(cs)
+    if withtail and tag.tail:
+        a.append(tag.tail)
+    if a:
+        return u''.join(a)
+    else:
+        return ''
 
 
 
-
-
-
-
-
-if __name__ == "__main__":
-
-    def usage():
-        print '''epub.py [options] [ source ]
-
-        -j              get config from json file
-        -c|--cover      cover image file, jpg/png/svg please
-        -a|--author     author of the book (default: Unknown)
-        -t|--title      title of the book (default: Unknown)
-        -e|--epub       name of epub
-        -s|--selector   selector of content (default: div.htmlcontent)
-        -u|--unwrap     unwrap selector (default: false)
-        -r|--root       epub root directory (default: epub)
-        --count         first count files (for debug only)
-        --encode        default is UTF-8
-        --dry           dry run
-
-        settings in json are overridden by command-line options
-
-        the most common launch method is
-
-        epub.py <source_folder>
-            where source_folder contains all pages, configure is
-            read from <source_folder>/epub.json and the output
-            is epub/
+def usage():
+    print '''epub.py  <source_folder>
+        where source_folder contains all pages, configure is
+        read from <source_folder>/epub.json and the output
+        is epub/
+        
+        epub.py --test test_file
 '''
 
-    def getConfig():
-        ''' load configuration from json and command-line options '''
-        #default configuration
-        cfg = {
-            'src':      None,
-            'root':     'epub',
-            'selector': 'div.htmlcontent',
-            'title':    'Unknown',
-            'author':   'Unknown',
-            'cover':    None,
-            'epub':     None,
-            'unwrap':   False,
-            'encode':   'utf-8',
-            'strip':    None,
-            'count':    0,
-        }
 
-        try:
-            opt_short = 'c:a:t:s:j:hr:e:du'
-            opt_long = ['cover=', 'author=', 'title=',
-                        'selector=', 'strip=', 'help', 'root=',
-                        'count=', 'unwrap', 'dry' ]
-            opts, files = getopt.getopt(sys.argv[1:], opt_short, opt_long)
-        except getopt.GetoptError as err:
-            print err
-            usage()
+def getConfig(argv = None):
+    ''' load configuration from json and command-line options '''
+    #default configuration
+    cfg = {
+        'src':      None,
+        'root':     'epub',
+        'xpath':    'div.htmlcontent',  # safari-online
+        'title':    'Unknown',
+        'title2':   '',
+        'author':   'Unknown',
+        'other':    '',
+        'cover':    None,
+        'epub':     None,               # name of epub
+        'unwrap':   True,
+        'reflow':   False,
+        'encoding': 'utf-8',
+        'count':    0,
+    }
+
+    if argv is not None and len(argv) > 0: cfg['src'] = argv[0]
+    if cfg['src']:
+        if not os.path.exists(cfg['src']):
+            print 'source {0} doesn\'t exist\n'.format(cfg['src'])
             sys.exit(2)
-    
-        # check/load source and default config
-        if len(files) > 0:
-            src = files[0]
-            if not os.path.exists(src):
-                print 'source {0} doesn\'t exist\n'.format(src)
-                sys.exit(2)
-        else:
-            src = os.getcwd()
-        cfg['src'] = src
-        defaultJson = '{0}/epub.json'.format(src)
-        if os.path.exists(defaultJson):
-            for jk,jv in loadJson(defaultJson).items():
-                cfg[jk] = jv
-
-        # load configuration first from json if defined
-        for o,v in opts:
-            if o == '-j':
-                for jk,jv in loadJson(v).items():
-                    cfg[jk] = jv
-            elif o == '-h' or o == '--help':
-                usage()
-                sys.exit(0)
-
-        # use command to set or to override json
-        for o,v in opts:
-            if o == '-j': pass          # processed already
-            elif o == '-a' or o == '--author':
-                cfg['author'] = v
-            elif o == '-t' or o == '--title':
-                cfg['title'] = v
-            elif o == '-c' or o == '--cover':
-                cfg['cover'] = v
-            elif o == '-s' or o == '--selector':
-                cfg['selector'] = v
-            elif o == '-e' or o == '--epub':
-                cfg['epub'] = v
-            elif o == '-r' or o == '--root':
-                cfg['root'] = v
-            elif o == '-u' or o == '--unwrap':
-                cfg['unwrap'] = True
-            elif o == '--strip':
-                cfg['strip'] = v
-            elif o == '--encode':
-                cfg['encode'] = v
-            elif o == '--count':
-                print 'count=', v
-                cfg['count'] = v
-            elif o == '--dry':
-                cfg['dry'] = True
-    
-        return cfg
-    
-    def loadJson(name):
-        ''' Load configuration from json file '''
+        jname = '{0}/epub.json'.format(cfg['src'])
+    else:
+        jname = 'epub.json'
+    if os.path.exists(jname):
         try:
-            with codecs.open(name, 'r', 'utf-8') as fp:
-                return json.load(fp)
+            with codecs.open(jname, 'r', 'utf-8') as fp:
+                for k,v in json.load(fp).items():
+                    cfg[k] = v
         except Exception as ex:
             print 'Fail to load json:' + ex
-            return {}
+    return cfg
 
 
+def dumptag(tag, pretty_print=False, with_tail=True):
+    print etree.tostring(tag, pretty_print=pretty_print, with_tail=with_tail, encoding='utf8')
 
 
+def test():
+    cfg['xpath'] = '//p[@class="cn"]'
+    cfg['xpath'] = '//td[@width="702"]/p[@align="left"][1]'
+    cfg['unwrap'] = True
+    page = MyPage('ty.htm', cfg)
+    print page.output(reflow=True).encode('utf8')
+    sys.exit(0)
+    
+
+def testPage(argv):
     cfg = getConfig()
-    # google-doc: div#gc-content div
+    #cfg['dumpload'] = True
+    page = MyPage(argv[0], cfg)
+    print '='*40
+    print 'Title=', page.title().encode('utf8')
+    print '='*40
+    print page.output(reflow=True).encode('utf8')
+    sys.exit(0)
+
+
+def run(argv):
+    cfg = getConfig(argv)
     epub = EPub(cfg)
     epub.parse(verbose=True)
     print 'compressing ...'
     epub.zip()
     print '-'*40, 'done'
+
+
+if __name__ == "__main__":
+    try:
+        opt_short = None
+        opt_long = [ 'test' ]
+        opts, files = getopt.getopt(sys.argv[1:], opt_short, opt_long)
+    except getopt.GetoptError as err:
+        print err
+        usage()
+        sys.exit(2)
+    
+    for o,v in opts:
+        if o == '--test':
+            testPage(files)
+        else:
+            run(files)
 
