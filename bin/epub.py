@@ -1,9 +1,10 @@
 #! /usr/bin/python
 # -*- coding: UTF-8 -*-
 
-import sys, os, os.path, stat, glob, getopt, codecs
+import sys, os, os.path, stat, glob, getopt, time, random, codecs
 import re, shutil, uuid, json, zipfile
 import xml.sax.saxutils
+import urllib2, urlparse
 from lxml import etree
 from lxml import cssselect
 
@@ -355,7 +356,7 @@ class EPub:
             self.dump_xpath()
         for f in flist:
             # parse all (html) files, but skip index.(x)htm(l)
-            if re.search(r'index.*\.x?html?$', f, flags=re.I):
+            if re.search(r'index.*?\.x?html?$', f, flags=re.I):
                 continue
             self.parsePage(f)
             if verbose: print f
@@ -374,7 +375,7 @@ class EPub:
             if src is None or src == '.':
                 src = os.getcwd()
             src = os.path.basename(src)
-            zfname = u'{0}.epub'.format(src)
+            zfname = '%s.epub' % src
             self.cfg['epub'] = zfname
         zf = zipfile.ZipFile(zfname, 'w', zipfile.ZIP_DEFLATED)
         path = self.root    # root of epub structure, ./epub by default
@@ -390,21 +391,23 @@ class EPub:
         ''' parse a page, copy/convert img files, extract mainContent
         into xhtml, add into manifester and toc list'''
         print "parsePage: " + fname
-        page = MyPage(fname, self.cfg)
+        cfg = self.cfg
+        page = MyPage(fname, self.cfg.get('encoding'))
+        page.filter(cfg.get('xpath'), cfg.get('unwrap', False))
         page.cleanPage()
         # copy all images into /OEBPS/Images
-        for c in page.images():
+        for i in page.images():
             try:
-                fimg = c.get('src')
+                fimg = i.get('src')
                 if re.match(r'http://.*', fimg):
-                    page.remove(c)
+                    page.remove(i)
                     continue
                 if self.src is not None:
                     fimg = os.path.join(self.src, fimg)
                 nf,isDup = self.copyResFile(fimg)
                 if not isDup:
                     self.addManifest(nf)
-                if fimg != nf: c.set('src', nf)
+                if fimg != nf: i.set('src', nf)
             except Exception as (e):
                 print 'parsePage.img ({0} - {1}): {2}'.format(fname, fimg, e)
         rname = os.path.splitext(os.path.basename(fname))[0] + ".xhtml"
@@ -413,7 +416,7 @@ class EPub:
             title = xml.sax.saxutils.escape(title)
         try:
             with codecs.open(u"{0}/OEBPS/{1}".format(self.root, rname), "w", 'utf-8') as fp:
-                c = page.output(reflow=self.cfg['reflow'])
+                c = page.output(reflow=cfg.get('reflow'), pagewidth=cfg.get('pagewidth'))
                 txt = _T_xhtml.format(title=title, content=c)
                 fp.write(txt)
         except Exception as ex:
@@ -628,7 +631,7 @@ class MyPage(object):
     pattern_gb = re.compile(r'gb[-_0-9]+$', re.IGNORECASE)
     h_all = '|'.join(['.//h%d' % i for i in range(1,10)])
 
-    def __init__(self, src, cfg):
+    def __init__(self, src=None, encoding=None):
         ''' Load html file using lxml.etree. Because lxml doesn't handle
             encoding well enough, detect charset="encoding" first.
             The content is converted into unicode.
@@ -638,33 +641,73 @@ class MyPage(object):
             xpath       string or list define filter(s)
             unwrap      unwrap filter tags
         '''
-        self.fname = src
-        with open(self.fname) as fp:
-            self.raw_text = fp.read()
-        match = MyPage.pattern_charset.search(self.raw_text)
-        if match:
-            self.encoding = match.group(1)
-        else:
-            self.encoding = cfg.get('encoding')
-        encoding = self.encoding
-        if encoding is None:
-            self.text = unicode(self.raw_text)
-        else:
-            if MyPage.pattern_gb.match(encoding):
-                encoding = 'gb18030'    # superset of all GB encodings
-            v = unicode(self.raw_text, encoding)
-            self.text = MyPage.pattern_charset.sub('charset=UTF-8', v, 1)
-        self.text = re.sub(ur'\r\n', u'\n', self.text)
+        self.encoding = encoding
+        self.text = None
+        if src is not None:
+            self.load(src)
+        
+        
+    def load(self, fname):
+        ''' Load page from file
+        '''
+        try:
+            self.fname = fname
+            with open(self.fname) as fp:
+                text = fp.read()
+            self.decode(text)
+            #print self.text.encode('utf8')
+        except Exception, ex:
+            print("Fail to load from file {}\n{}".format(self.fname, ex))
+            raise ex
+
+
+    def loadUrl(self, url, cache=None):
+        ''' Load page from URL
+            if cache specified
+                save in the cache after loading if it doens't exist
+                load from the cache if it exists
+        '''
+        self.url = url
+        self.cache = cache
+        try:
+            f = None
+            if self.cache is not None and os.path.exists(self.cache):
+                # cache exists and use it instead
+                fname = self.cache
+                f = open(self.cache, 'r')
+            else:
+                fname = self.url
+                f = urllib2.urlopen(self.url)
+            text = f.read()
+            f.close()
+            self.decode(text)
+            if self.cache is not None and not os.path.exists(self.cache):
+                # cache specified but it doesn't exist, create one
+                with open(self.cache, 'w') as f:
+                    f.write(self.text.encode('utf8'))
+        except Exception, ex:
+            print("Fail to load url {}\n{}".format(self.url, ex))
+            raise ex
+
+
+    def filter(self, xpath, unwrap=True, dump=False):
+        ''' Apply filter to mypage
+            
+            cfg:
+            xpath       string or list define filter(s)
+            unwrap      unwrap filter tags
+        '''
         self.root = etree.HTML(self.text)
         body = self.root.xpath('//body')[0]
         self.mypage = etree.Element('div', id='__mypage__')
         nselected = 0
-        xpath = cfg.get('xpath')
-        unwrap = cfg.get('unwrap', True)
-        if xpath is None:
-            self.mypath = body
-        elif isinstance(xpath, str) or isinstance(xpath, unicode):
+        tbody = re.compile(r'\btbody\b', re.IGNORECASE)
+        if xpath is None or xpath == '//body':
+            self.mypage = body
+            return
+        elif isinstance(xpath, basestring):
             # xpath is a string
+            xpath = tbody.sub('', xpath)
             for t in self.root.xpath(xpath):
                 self.moveto(t, self.mypage, unwrap=unwrap)
                 nselected += 1
@@ -675,27 +718,55 @@ class MyPage(object):
             remove_list = []
             for s in xpath:
                 if s[0] == '-':
-                    remove_list.append(s[1:])
+                    remove_list.append(tbody.sub('', s[1:]))
                 else:
-                    add_list.append(s)
+                    add_list.append(tbody.sub('', s))
             for p in add_list:
+                p = tbody.sub('', p)
                 for t in self.root.xpath(p):
                     for rp in remove_list:
+                        rp = tbody.sub('', rp)
                         for r in t.xpath(rp):
                             self.remove(r)
                     self.moveto(t, self.mypage, unwrap=unwrap)
                     nselected += 1
         else:
             raise Exception('unknown xpath')
-        if cfg.get('dumpload'):
+        if dump:
             dumptag(self.mypage)
         if nselected == 0:
             raise Exception('nothing selected')
 
 
+    def decode(self, text, encoding=None):
+        ''' Decode html text into unicode, using encoding
+            unless charset is specified in text.
+            
+            Return a tuple (decoded-text, 
+        '''
+        match = MyPage.pattern_charset.search(text)
+        if match:
+            self.encoding = match.group(1)
+        if self.encoding is None:
+            text = unicode(text)
+        else:
+            # GB18030 is superset of all GB encodings set
+            if MyPage.pattern_gb.match(self.encoding):
+                text = unicode(text, 'gb18030')
+            else:
+                text = unicode(text, self.encoding)
+        text = MyPage.pattern_charset.sub('charset=UTF-8', text, 1)
+        self.text = re.sub(ur'\r\n', u'\n', text)
+
+
     def images(self):
-        ''' list all <img> in mainContent'''
+        ''' list all tags <img>'''
         return self.mypage.xpath('.//img')
+
+
+    def links(self):
+        ''' list all tags <a> with @href '''
+        return self.mypage.xpath('.//a[@href]')
 
 
     def title(self, by_level=False):
@@ -777,7 +848,7 @@ class MyPage(object):
     def remove(self, tag):
         ''' Remove a tag (and all its descendants) from the tree. '''
         parent = tag.getparent()
-        if parent:
+        if parent is not None:
             parent.remove(tag)
 
 
@@ -841,13 +912,13 @@ class MyPage(object):
             self.remove(t)
 
 
-    def output(self, prettify=True, reflow=False):
+    def output(self, prettify=True, reflow=False, pagewidth=None):
         ''' Output mypage into a (unicode) string '''
         try:
             for a in self.mypage.xpath('//a[@href]'):
                 self.unwrap(a)
             if reflow:
-                reflow_br(self.mypage)
+                reflow_br(self.mypage, pagewidth)
                 prettify = True
             return self.unwrap_text(self.mypage, pretty = prettify)
         except Exception as ex:
@@ -890,28 +961,39 @@ def append_tag_string(txt_list, tag, with_tail=True, inline=False):
             txt_list[-1] += ' ' + t
         else:
             txt_list.extend(pattern_newline.split(t))
+    else:
+        txt_list.append('')
     return t
 
 
-def reflow_br(tag):
+def reflow_br(tag, pagewidth=None):
     ''' Reflow a block of text (div or p or others) that are manually 
         formatted by hard-coded <br/>. This is quite common in many
         Chinese pages converted from text file.
     '''
     txt = []
+    #dump_tag(tag)
     append_tag_string(txt, tag, with_tail = False)
     tag.text = None
     for c in tag:
+        #print 'reflow_br: <%s>' % c.tag
         if c.tag == 'a':
-            append_tag_string(txt, tag, inline = True)
+            t = append_tag_string(txt, tag, inline = True)
         elif c.tag == 'br':
-            append_tag_string(txt, c)
+            t = append_tag_string(txt, c)
+        else:
+            t = txt.append(tag2text(c, True))
+        #print 'None' if t is None else t.encode('utf8')
         tag.remove(c)
-    nw = most_common_width(txt)
+    if pagewidth is None:
+        nw = most_common_width(txt)
+    else:
+        nw = pagewidth
     paragraphs = []
     latest_para = ''
     for t in txt:
-        n = len(t) if t is not None else 0
+        n = len('' if t is None else t)
+        #print ('%d/%d: %s' % (n, nw, t)).encode('utf8')
         if n < nw - 2:
             paragraphs.append(latest_para + t)
             latest_para = ''
@@ -947,6 +1029,44 @@ def tag2text(tag, withtail = False):
     else:
         return ''
 
+
+def dump_tag(tag, pretty_print=False):
+    print etree.tostring(tag, pretty_print=pretty_print, encoding='utf8')
+
+
+def get_urls(argv, verbose=False, test=False):
+    ''' load files from an index page, file URLs in index'''
+    cfg = getConfig(argv)
+    folder = cfg.get('src', '')
+    encoding = cfg.get('encoding')
+    url = cfg.get('url')
+    ipage = MyPage(encoding=encoding)
+    ipage.loadUrl(url, os.path.join(folder, 'index-cache.html'))
+    ipage.filter(cfg.get('xpath-i'), unwrap=False)
+    links = ipage.links()
+
+    nn = 1
+    fnameTemp = u'{seq:03d}.html'
+    for a in links:
+        title = a.text
+        if title is None:
+            title=''
+        else:
+            title = title.strip()
+        href = urlparse.urljoin(url, a.get('href'))
+        fname = os.path.join(folder, fnameTemp.format(seq=nn))
+        a.set('href', fname)
+        v = u'{}\n    {}={}'.format(title, fname, href)
+        print v.encode('UTF-8')
+        if not (test or os.path.exists(fname)):
+            spage = MyPage(encoding=encoding)
+            spage.loadUrl(href, fname)
+            #todo- write title back
+            sleep_time = random.randint(1,100)/10.0
+            print 'sleep({:.1f})...'.format(sleep_time)
+            time.sleep(sleep_time)
+        nn += 1
+    sys.exit(0)
 
 
 def usage():
@@ -1012,11 +1132,14 @@ def test():
 def testPage(argv):
     cfg = getConfig()
     #cfg['dumpload'] = True
-    page = MyPage(argv[0], cfg)
+    page = MyPage(src=argv[0], encoding = cfg.get('encoding'))
+    page.filter(cfg.get('xpath'), cfg.get('unwrap', False), cfg.get('dumpload'))
+    page.cleanPage()
     print '='*40
     print 'Title=', page.title().encode('utf8')
     print '='*40
-    print page.output(reflow=True).encode('utf8')
+    #print etree.tostring(page.mypage, pretty_print=True, encoding='utf8')
+    print page.output(reflow=cfg.get('reflow', False), pagewidth=cfg.get('pagewidth')).encode('utf8')
     sys.exit(0)
 
 
@@ -1032,7 +1155,7 @@ def run(argv):
 if __name__ == "__main__":
     try:
         opt_short = None
-        opt_long = [ 'test' ]
+        opt_long = [ 'test', 'load', 'load-test' ]
         opts, files = getopt.getopt(sys.argv[1:], opt_short, opt_long)
     except getopt.GetoptError as err:
         print err
@@ -1042,6 +1165,9 @@ if __name__ == "__main__":
     for o,v in opts:
         if o == '--test':
             testPage(files)
-        else:
-            run(files)
+        if o == '--load':
+            get_urls(files)
+        if o == '--load-test':
+            get_urls(files, test=True)
+    run(files)
 
