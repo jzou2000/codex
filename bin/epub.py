@@ -416,7 +416,7 @@ class EPub:
             title = xml.sax.saxutils.escape(title)
         try:
             with codecs.open(u"{0}/OEBPS/{1}".format(self.root, rname), "w", 'utf-8') as fp:
-                c = page.output(reflow=cfg.get('reflow'), pagewidth=cfg.get('pagewidth'))
+                c = page.output(reflow=cfg.get('reflow'), pagewidth=cfg.get('pagewidth'), autopara=cfg.get('autopara'))
                 txt = _T_xhtml.format(title=title, content=c)
                 fp.write(txt)
         except Exception as ex:
@@ -912,7 +912,7 @@ class MyPage(object):
             self.remove(t)
 
 
-    def output(self, prettify=True, reflow=False, pagewidth=None):
+    def output(self, prettify=True, reflow=False, pagewidth=None, autopara=False):
         ''' Output mypage into a (unicode) string '''
         try:
             for a in self.mypage.xpath('//a[@href]'):
@@ -966,7 +966,7 @@ def append_tag_string(txt_list, tag, with_tail=True, inline=False):
     return t
 
 
-def reflow_br(tag, pagewidth=None):
+def reflow_br(tag, pagewidth=None, autopara=False):
     ''' Reflow a block of text (div or p or others) that are manually 
         formatted by hard-coded <br/>. This is quite common in many
         Chinese pages converted from text file.
@@ -982,7 +982,7 @@ def reflow_br(tag, pagewidth=None):
         elif c.tag == 'br':
             t = append_tag_string(txt, c)
         else:
-            t = txt.append(tag2text(c, True))
+            t = txt.extend(pattern_newline.split(tag2text(c, True)))
         #print 'None' if t is None else t.encode('utf8')
         tag.remove(c)
     if pagewidth is None:
@@ -994,7 +994,7 @@ def reflow_br(tag, pagewidth=None):
     for t in txt:
         n = len('' if t is None else t)
         #print ('%d/%d: %s' % (n, nw, t)).encode('utf8')
-        if n < nw - 2:
+        if autopara or nw < 1 or n < nw - 2:
             paragraphs.append(latest_para + t)
             latest_para = ''
         else:
@@ -1139,7 +1139,7 @@ def testPage(argv):
     print 'Title=', page.title().encode('utf8')
     print '='*40
     #print etree.tostring(page.mypage, pretty_print=True, encoding='utf8')
-    print page.output(reflow=cfg.get('reflow', False), pagewidth=cfg.get('pagewidth')).encode('utf8')
+    print page.output(reflow=cfg.get('reflow', False), pagewidth=cfg.get('pagewidth'), autopara=cfg.get('autopara')).encode('utf8')
     sys.exit(0)
 
 
