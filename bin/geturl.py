@@ -30,14 +30,6 @@ ParseResult(scheme='http', netloc='site', path='/doc', params='', query='', frag
 '''
 
 
-def UrlPath(url):
-    ''' divide url into path/file '''
-    m = re.match(r'(.*)/(.*)', url)
-    if m:
-        return m.group(1), m.group(2)
-    else:
-        return None, url
-
 def loadJson(fname):
     ''' Load configuration from json file '''
     try:
@@ -58,14 +50,6 @@ class MyTask:
     '''Get a list of url'''
     def __init__(self, opt):
         self.opt = opt
-
-    def run1(self, base, pattern, col):
-        for s in col:
-            fname = pattern.format(s)
-            url = '{0}/{1}'.format(base, fname)
-            target = UrlTarget(url, fname)
-            target.download()
-            time.sleep(2.3)
 
     def run(self):
         ''' load files from an index page, file URLs in index'''
