@@ -8,10 +8,10 @@ import sys, time, random
 
 try:
     count = int(sys.argv[1])
-    if count < 100:
-        count = 100
+    if count < 20:
+        count = 20
 except Exception as ex:
-    count = 100
+    count = 20
 
 c1 = time.clock()
 nv = range(count)
