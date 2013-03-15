@@ -6,12 +6,23 @@
  *
  * The result on a linux (fedora 18) with 4 cores @2.40G 4GB Mem
  *
- * [jzou@luigi language]$ ./qsort r1m.txt
- * size=1000000
- * load: 0.19
- * qsort: 0.50
+ * [jzou@luigi language]$ ./qsort r1m.txt       # 1000000 shuffled data
+ * load: 0.18
+ * duplicate: 0.00
+ * qsort: 0.49
  * validate: 0.03
- * std::sort: 0.50
+ * tqsort: 0.28
+ * std::sort: 0.51
+ * 
+ *
+ * for -O3 optimization
+ *
+ * load: 0.16
+ * duplicate: 0.00
+ * qsort: 0.12
+ * validate: 0.00
+ * tqsort: 0.12
+ * std::sort: 0.10
  * 
  */
 
@@ -52,7 +63,7 @@ void dumpq(V& v)
     cout << endl;
 }
 
-void _qsort(V& v, int start, int end)
+void qsort(V& v, int start, int end)
 {
     if (start >= end)
         return;
@@ -71,19 +82,43 @@ void _qsort(V& v, int start, int end)
         }
     }
     swap(v[m], v[end]);
-    _qsort(v, start, m - 1);
-    _qsort(v, m + 1, end);
+    qsort(v, start, m - 1);
+    qsort(v, m + 1, end);
 }
 
-void qsort(V& v)
+/* same with qsort, except using template to avoid cost of vector access */
+#define tswap(a,b)  {t=a;a=b;b=t;}
+template <typename T>
+void tqsort(T* v, int start, int end)
 {
-    _qsort(v, 0, v.size() - 1);
+    if (start >= end)
+        return;
+
+    int m = (start + end)/2;
+    T pivot = v[m];
+    T t;
+    if (m < end)
+        tswap(v[m], v[end]);
+
+    m = start;
+    for (int i = start; i < end; i++) {
+        if (v[i] < pivot) {
+            tswap(v[i], v[m]);
+            m += 1;
+        }
+    }
+    tswap(v[m], v[end]);
+    tqsort(v, start, m - 1);
+    tqsort(v, m + 1, end);
 }
 
 
 int main(int argc, char* argv[])
 {
     try {
+        cout.setf(std::ios::fixed);
+        cout.precision(2);
+
         std::fstream f(argv[1]);
         if (!f.good())
             throw std::string("Fail to open the file");
@@ -94,14 +129,16 @@ int main(int argc, char* argv[])
         while ((f >> i)) {
             v.push_back(i);
         }
-        float t1 = timeit();
-        cout << "size=" << v.size() << endl;
-
-        V v2 = v;
+        cout << "load: " << timeit() << endl;
+        int size = v.size();
 
         timeit();
-        qsort(v);
-        float t2 = timeit();
+        V v2 = v;
+        cout << "duplicate: " << timeit() << endl;
+
+        timeit();
+        qsort(v, 0, size - 1);
+        cout << "qsort: " << timeit() << endl;
 
         /* validate the result is correct. The input is shuffled
          * from python range(number) */
@@ -113,19 +150,19 @@ int main(int argc, char* argv[])
                 break;
             }
         }
-        float t3 = timeit();
+        cout << "validate: " << timeit() << endl;
+
+        int* ti = new int [size];
+        for (i = 0; i < size; i++)
+            ti[i] = v2[i];
+        timeit();
+        tqsort(ti, 0, size - 1);
+        cout << "tqsort: " << timeit() << endl;
+        delete [] ti;
 
         timeit();
         sort(v2.begin(), v2.end());
-        float t4 = timeit();
-
-        cout.setf(std::ios::fixed);
-        cout.precision(2);
-        cout << "load: " << t1 << endl;
-        cout << "qsort: " << t2 << endl;
-        cout << "validate: " << t3 << endl;
-        cout << "std::sort: " << t4 << endl;
-
+        cout << "std::sort: " << timeit() << endl;
     }
     catch (std::string& e) {
         cerr << e << endl;

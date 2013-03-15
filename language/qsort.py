@@ -7,16 +7,26 @@ import sys, time, random
 The result on a linux (fedora 18) with 4 cores @2.40G 4GB Mem
 
 [jzou@luigi language]$ ./qsort.py r1m.txt
-load:  1.07
-qsort:  7.82
-validate:  0.3
-build-in sort(): 0.93
+load:  1.0
+duplicate:  0.03
+qsort:  7.8
+validate:  0.29
+buildin:  0.92
 
-for reference to C++ version
-    load: 0.19
-    qsort: 0.50
-    validate: 0.03
-    std::sort: 0.50
+For reference run on the same machine
+---------------------------------------------------------
+             C        C++      java     perl
+load:        0.16     0.17     0.70     0.46
+duplicate    0.00     0.00     0.00     0.18
+qsort:       0.27     0.50     0.15    12.88
+qsort(O3):   0.12     0.12
+validate:    0.00     0.03     0.00     0.12
+buildin:     0.26     0.50     0.58     1.12
+buildin(O3): 0.26     0.10
+
+c++: std::sort
+java: ArrayList.sort
+perl: 5.16
 
 It's about 15 times slower for 'pure' python codes.
 
@@ -63,32 +73,27 @@ if __name__ == '__main__':
         with open(sys.argv[1], 'r') as fp:
             for line in fp:
                 data.extend([ int(s) for s in line.split(' ')])
-        c1 = click()
+        print 'load: ', click()
 
         click()
         d2 = data[:]    # make a copy for compare
-        c5 = click()
+        print 'duplicate: ', click()
 
         click()
         qsort(data)
-        c2 = click()
+        print 'qsort: ', click()
 
         click()
         for i in range(len(data)):
             if data[i] != i:
                 print 'qsort failed'
                 break
-        c3 = click()
+        print 'validate: ', click()
 
         click()
         d2.sort()
-        c4 = click()
+        print 'buildin: ', click()
 
-        print 'load: ', c1
-        print 'qsort: ', c2
-        print 'validate: ', c3
-        print 'duplicate: ', c5
-        print 'build-in sort(): ', c4
     except Exception as ex:
         print 'Exception: ', ex
 
