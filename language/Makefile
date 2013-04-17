@@ -5,6 +5,9 @@ CFLAGS = -O3
 CXXFLAGS = $(CFLAGS)
 LDFLAGS =
 
+cpp-virtual: cpp-virtual.o
+	$(CXX) -o $@ $? $(LDFLAGS)
+
 cpp_contain: cpp_contain.o
 	$(CXX) -o $@ $? $(LDFLAGS)
 
