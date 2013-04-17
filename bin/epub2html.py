@@ -21,6 +21,7 @@ def epub2html(epubName, path=None):
         fn = i.filename
         if not re.match(pat, fn): continue
         fn = re.sub(pat, '', fn)
+        if fn is None or len(fn) == 0: continue
         sub, fname = os.path.split(fn)
         if sub:
             if path:
@@ -28,10 +29,12 @@ def epub2html(epubName, path=None):
             if not os.path.exists(sub):
                 os.makedirs(sub)
         dat = ar.read(i)
+        if len(fname) == 0 or len(dat) == 0: continue
         if sub:
             fname = os.path.join(sub, fname)
         elif path:
             fname = os.path.join(path, fname)
+        print fname
         with open(fname, 'w') as fp:
             fp.write(dat)
     ar.close()
