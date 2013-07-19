@@ -1,0 +1,47 @@
+Valgrind
+
+  Core
+    Invoke: valgrind [valgrind-options] your-program [ your-program-options ]
+        valgrind --tool=memcheck ls -l  # --tool=memcheck is default
+
+        ==25832== Invalid read of size 4
+        ==25832==    at 0x8048724: BandMatrix::ReSize(int, int, int) (bogon.cpp:45)
+        ==25832==    by 0x80487AF: main (bogon.cpp:66)
+        ==25832==  Address 0xBFFFF74C is not stack'd, malloc'd or free'd
+        -v
+        --log-fd=9
+        --log-file=filename
+        --log-socket=192.168.0.1:1234
+        --gen-suppressions=yes
+        --suppressions=/path/to/file.supp
+
+  Memcheck
+    use of uninitialized values
+    use of uninitialized/unaddressable values in system calls
+    illegal frees
+    a heap block is freed with an inappropriated deallocation function
+    overlapping source and destination blocks
+    memory leak  --leak-check
+    suppression files
+
+  Cachegrind - a cache and branch-prediction profiler
+
+  Callgrind - a call-graph generating cache and branch prediction profiler
+    --tool=callgrind
+        --callgrind-out-file=<file>     default: callgrind.out.<pid>
+        --dump-line=<yes|no>
+        --collect-atstart=<yes|no>
+    callgrind_annotate
+        --inclusive=<no|yes>
+        --tree=<none|caller|calling|both>
+    kcachegrind
+    callgrind_control -d [ hint [ PID/Name ]]
+        --dump-before=<function>
+        --dump-after=<function>
+        --zero-before=<function>
+        -z --zero       zero all counters
+        -s --stat       show statistics
+        -k --kill       force a callgrind run to be terminated
+
+  Helgrind - a thread error detector
+

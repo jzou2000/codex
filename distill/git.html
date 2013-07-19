@@ -1,0 +1,641 @@
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <title>git cookbook</title>
+  <style type="text/css">
+  pre { border: solid black thin; padding: 2em; margin: 2em; }
+  pre div { background: lightgrey; }
+  pre span { background: lightgrey; }
+  pre i { color: red; }
+  pre b { text-decoration: underline; }
+  table td { valign: top; }
+  table.list tr td:first-of-type { padding-right: 2em; }
+  </style>
+</head>
+
+<body>
+<h2>Create three directories</h2>
+<ul>
+ <li>work - a regular git directory, contains work files and repo in .git</li>
+ <li>repo - a directory independent from work, planning to save shared/published repo</li>
+ <li>branch - try to show check out branch to different directory</li>
+</ul>
+<pre>
+jzou@luigi ~/rnd/git $ mkdir work repo branch
+jzou@luigi ~/rnd/git $ ls -l
+total 12
+drwxrwxr-x 2 jzou jzou 4096 Jun 20 12:08 branch
+drwxrwxr-x 2 jzou jzou 4096 Jun 20 12:08 repo
+drwxrwxr-x 2 jzou jzou 4096 Jun 20 12:08 work
+jzou@luigi ~/rnd/git $ cd work
+jzou@luigi ~/rnd/git/work $ ls
+jzou@luigi ~/rnd/git/work $ <b>git init</b>
+Initialized empty Git repository in /home/jzou/rnd/git/work/.git/
+jzou@luigi ~/rnd/git/work $ ls -al
+total 12
+drwxrwxr-x 3 jzou jzou 4096 Jun 20 12:08 .
+drwxr-xr-x 5 jzou jzou 4096 Jun 20 12:08 ..
+<span>drwxrwxr-x 7 jzou jzou 4096 Jun 20 12:08 .git</span>
+jzou@luigi ~/rnd/git/work $ 
+</pre>
+
+
+<h2>Merge or change the last commit</h2>
+It is quite often that the author changes his idea immediately after commit.
+The last commit will be replaced by the amended commit.
+<pre>
+jzou@luigi ~/rnd/git/work $ cat > Readme
+This is the initial version.
+jzou@luigi ~/rnd/git/work $ <b>git add Readme</b>
+jzou@luigi ~/rnd/git/work $ <b>git commit -m 'First commit after init'</b>
+[master (root-commit) 6844b77] First commit after init
+ 1 file changed, 1 insertion(+)
+ create mode 100644 Readme
+jzou@luigi ~/rnd/git/work $ cat >> Readme
+add one line, the 2nd version
+jzou@luigi ~/rnd/git/work $ <b>git commit -a -m '2nd commit'</b>
+[master 0b1f10e] 2nd commit
+ 1 file changed, 1 insertion(+)
+jzou@luigi ~/rnd/git/work $ <b>git log</b>
+commit 0b1f10e7b0616f5d6fdb4b00e4e1e19b67164544
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 12:15:23 2013 -0400
+
+    2nd commit
+
+commit 6844b772ff5f752f434f5705a44d79fb2974cb5b
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 12:12:30 2013 -0400
+
+    First commit after init
+jzou@luigi ~/rnd/git/work $ cat >> Readme
+This line is forgottn to the previous commit. Can I amend it?
+jzou@luigi ~/rnd/git/work $ cat Readme
+This is the initial version.
+add one line, the 2nd version
+This line is forgottn to the previous commit. Can I amend it?
+jzou@luigi ~/rnd/git/work $ <b>git add Readme</b>
+jzou@luigi ~/rnd/git/work $ <b>git commit --amend -m 'amend to 2nd commit'</b>
+[master d1687ae] amend to 2nd commit
+ 1 file changed, 2 insertions(+)
+jzou@luigi ~/rnd/git/work $ <b>git log -p</b>
+commit d1687ae9c3a5018725c842ec8ab3fd4559a0998e
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 12:15:23 2013 -0400
+
+    amend to 2nd commit
+
+diff --git a/Readme b/Readme
+index c4d4f05..cb593c3 100644
+--- a/Readme
++++ b/Readme
+@@ -1 +1,3 @@
+ This is the initial version.
+<div>+add one line, the 2nd version
++This line is forgottn to the previous commit. Can I amend it?</div>
+
+commit 6844b772ff5f752f434f5705a44d79fb2974cb5b
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 12:12:30 2013 -0400
+
+    First commit after init
+
+diff --git a/Readme b/Readme
+new file mode 100644
+index 0000000..c4d4f05
+--- /dev/null
++++ b/Readme
+@@ -0,0 +1 @@
++This is the initial version.
+jzou@luigi ~/rnd/git/work $ 
+</pre>
+Let's do it again to demonstrate that we can amend any times.
+<pre>
+jzou@luigi ~/rnd/git/work $ ed Readme 
+121
+2,3c
+This line is the 2nd version (final)
+.
+wq
+66
+jzou@luigi ~/rnd/git/work $ <b>git commit -a --amend -m 'final 2nd version after two amends'</b>
+[master f6ce992] final 2nd version after two amends
+ 1 file changed, 1 insertion(+)
+jzou@luigi ~/rnd/git/work $ git log -p
+commit f6ce992dc80010aef82a68cc722f0821032373ab
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 12:15:23 2013 -0400
+
+    final 2nd version after two amends
+
+diff --git a/Readme b/Readme
+index c4d4f05..62506b8 100644
+--- a/Readme
++++ b/Readme
+@@ -1 +1,2 @@
+<div> This is the initial version.
++This line is the 2nd version (final)</div>
+
+commit 6844b772ff5f752f434f5705a44d79fb2974cb5b
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 12:12:30 2013 -0400
+
+    First commit after init
+
+diff --git a/Readme b/Readme
+new file mode 100644
+index 0000000..c4d4f05
+--- /dev/null
++++ b/Readme
+@@ -0,0 +1 @@
++This is the initial version.
+jzou@luigi ~/rnd/git/work $ 
+
+</pre>
+
+<h2>Branch and Merge</h2>
+A new branch (task-1) is created from master. Notice that everytime the branch is switched (checkout),
+the content is changed respectively, and the timestamp is always updated to the latest time,
+which is essential for program building.
+<pre>
+jzou@luigi ~/rnd/git/work $ <b>git branch task-1</b>
+jzou@luigi ~/rnd/git/work $ git branch
+<span>* master</span>
+  task-1
+jzou@luigi ~/rnd/git/work $ <b>git checkout task-1</b>
+Switched to branch 'task-1'
+jzou@luigi ~/rnd/git/work $ git branch
+  master
+<span>* task-1</span>
+jzou@luigi ~/rnd/git/work $ ls -l
+total 4
+-rw-rw-r-- 1 jzou jzou  66 Jun 20 13:09 Readme
+jzou@luigi ~/rnd/git/work $ cat >> Readme
+task-1: a new branch
+jzou@luigi ~/rnd/git/work $ git commit -a -m 'branch task-1 1st commit'
+[task-1 97274fc] branch task-1 1st commit
+ 1 file changed, 1 insertion(+)
+jzou@luigi ~/rnd/git/work $ git log -p
+commit 97274fc8e4f9e37b732f3e7a783df9b5b4d3a543
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 14:26:20 2013 -0400
+
+    branch task-1 1st commit
+
+diff --git a/Readme b/Readme
+index 62506b8..310bb34 100644
+--- a/Readme
++++ b/Readme
+@@ -1,2 +1,3 @@
+ This is the initial version.
+ This line is the 2nd version (final)
+<span>+task-1: a new branch</span>
+
+commit f6ce992dc80010aef82a68cc722f0821032373ab
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 12:15:23 2013 -0400
+
+    final 2nd version after two amends
+
+diff --git a/Readme b/Readme
+index c4d4f05..62506b8 100644
+--- a/Readme
++++ b/Readme
+@@ -1 +1,2 @@
+ This is the initial version.
++This line is the 2nd version (final)
+
+commit 6844b772ff5f752f434f5705a44d79fb2974cb5b
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 12:12:30 2013 -0400
+
+    First commit after init
+
+diff --git a/Readme b/Readme
+new file mode 100644
+index 0000000..c4d4f05
+--- /dev/null
++++ b/Readme
+@@ -0,0 +1 @@
++This is the initial version.
+jzou@luigi ~/rnd/git/work $ <b>git checkout master</b>
+Switched to branch 'master'
+jzou@luigi ~/rnd/git/work $ ls -l
+total 4
+<span>-rw-rw-r-- 1 jzou jzou  66 Jun 20 14:28 Readme</span>
+jzou@luigi ~/rnd/git/work $ git log -p
+commit f6ce992dc80010aef82a68cc722f0821032373ab
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 12:15:23 2013 -0400
+
+    final 2nd version after two amends
+
+diff --git a/Readme b/Readme
+index c4d4f05..62506b8 100644
+--- a/Readme
++++ b/Readme
+@@ -1 +1,2 @@
+ This is the initial version.
++This line is the 2nd version (final)
+
+commit 6844b772ff5f752f434f5705a44d79fb2974cb5b
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 12:12:30 2013 -0400
+
+    First commit after init
+
+diff --git a/Readme b/Readme
+new file mode 100644
+index 0000000..c4d4f05
+--- /dev/null
++++ b/Readme
+@@ -0,0 +1 @@
++This is the initial version.
+jzou@luigi ~/rnd/git/work $
+</pre>
+Now change master in parallel, then merge the branch task-1 back.
+Notice that the change in merge is not in log -p. (see solution below)
+<pre>
+jzou@luigi ~/rnd/git/work $ ed Readme
+66
+2
+This line is the 2nd version (final)
+s/ (.*//
+a 
+insert a new line, which will make conflict with branch task-1
+.
+wq
+127
+jzou@luigi ~/rnd/git/work $ cat Readme 
+This is the initial version.
+This line is the 2nd version
+insert a new line, which makes conflict with branch task-1 on merge.
+jzou@luigi ~/rnd/git/work $ git commit -a -m 'a change after branch, a conflict will happen when merge branch back'
+[master 3e30091] a change after branch, a conflict will happen when merge branch back
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+jzou@luigi ~/rnd/git/work $ git log -p
+commit 3e3009181a76fba48983f169317350a952c2ef1c
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 14:34:48 2013 -0400
+
+    a change after branch, a conflict will happen when merge branch back
+
+diff --git a/Readme b/Readme
+index 62506b8..c10b6f7 100644
+--- a/Readme
++++ b/Readme
+@@ -1,2 +1,3 @@
+ This is the initial version.
+-This line is the 2nd version (final)
++This line is the 2nd version
++insert a new line, which makes conflict with branch task-1 on merge.
+
+commit f6ce992dc80010aef82a68cc722f0821032373ab
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 12:15:23 2013 -0400
+
+    final 2nd version after two amends
+
+diff --git a/Readme b/Readme
+index c4d4f05..62506b8 100644
+--- a/Readme
++++ b/Readme
+@@ -1 +1,2 @@
+ This is the initial version.
++This line is the 2nd version (final)
+
+commit 6844b772ff5f752f434f5705a44d79fb2974cb5b
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 12:12:30 2013 -0400
+
+    First commit after init
+
+diff --git a/Readme b/Readme
+new file mode 100644
+index 0000000..c4d4f05
+--- /dev/null
++++ b/Readme
+@@ -0,0 +1 @@
++This is the initial version.
+jzou@luigi ~/rnd/git/work $ <b>git merge task-1</b>
+<div>Auto-merging Readme
+CONFLICT (content): Merge conflict in Readme
+Automatic merge failed; fix conflicts and then commit the result.</div>
+jzou@luigi ~/rnd/git/work $ cat Readme
+This is the initial version.
+<span><<<<<<< HEAD
+This line is the 2nd version
+insert a new line, which makes conflict with branch task-1 on merge.
+=======
+This line is the 2nd version (final)
+task-1: a new branch
+>>>>>>> task-1</span>
+jzou@luigi ~/rnd/git/work $ cat Readme   # after edit, show the result
+<div>This is the initial version.
+This line is the 2nd version
+task-1: a new branch
+master: insert a new line, which makes conflict with branch task-1 on merge.</div>
+jzou@luigi ~/rnd/git/work $ <b>git commit -a -m 'merge branch task-1 into master'</b>
+[master b348d8e] merge branch task-1 into master
+jzou@luigi ~/rnd/git/work $ <b>git log -p -4</b>
+<div>commit b348d8e003e4a6f6ae8519489229e4000b824e7e
+Merge: 3e30091 97274fc
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 14:39:39 2013 -0400
+
+    merge branch task-1 into master
+</div>
+commit 3e3009181a76fba48983f169317350a952c2ef1c
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 14:34:48 2013 -0400
+
+    a change after branch, a conflict will happen when merge branch back
+
+diff --git a/Readme b/Readme
+index 62506b8..c10b6f7 100644
+--- a/Readme
++++ b/Readme
+@@ -1,2 +1,3 @@
+ This is the initial version.
+-This line is the 2nd version (final)
++This line is the 2nd version
++insert a new line, which makes conflict with branch task-1 on merge.
+
+commit 97274fc8e4f9e37b732f3e7a783df9b5b4d3a543
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 14:26:20 2013 -0400
+
+    branch task-1 1st commit
+
+diff --git a/Readme b/Readme
+index 62506b8..310bb34 100644
+--- a/Readme
++++ b/Readme
+@@ -1,2 +1,3 @@
+ This is the initial version.
+ This line is the 2nd version (final)
++task-1: a new branch
+
+commit f6ce992dc80010aef82a68cc722f0821032373ab
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 12:15:23 2013 -0400
+
+    final 2nd version after two amends
+
+diff --git a/Readme b/Readme
+index c4d4f05..62506b8 100644
+--- a/Readme
++++ b/Readme
+@@ -1 +1,2 @@
+ This is the initial version.
++This line is the 2nd version (final)
+jzou@luigi ~/rnd/git/work $
+</pre>
+How about the branch is changed after merge, then be merged again?
+<pre>
+jzou@luigi ~/rnd/git/work $ <b>git checkout task-1</b>
+Switched to branch 'task-1'
+jzou@luigi ~/rnd/git/work $ cat Readme 
+This is the initial version.
+This line is the 2nd version (final)
+task-1: a new branch
+jzou@luigi ~/rnd/git/work $ cat >> Readme
+task-1: 2nd commit
+jzou@luigi ~/rnd/git/work $ <b>git commit -a -m '2nd commit in task-1'</b>
+[task-1 5adbd37] 2nd commit in task-1
+ 1 file changed, 1 insertion(+)
+jzou@luigi ~/rnd/git/work $ <b>git checkout master</b>
+Switched to branch 'master'
+jzou@luigi ~/rnd/git/work $ git merge task-1
+Auto-merging Readme
+CONFLICT (content): Merge conflict in Readme
+Automatic merge failed; fix conflicts and then commit the result.
+jzou@luigi ~/rnd/git/work $ cat Readme
+<span>This is the initial version.
+This line is the 2nd version
+task-1: a new branch
+<<<<<<< HEAD
+master: insert a new line, which makes conflict with branch task-1 on merge.
+=======
+task-1: 2nd commit
+>>>>>>> task-1</span>
+jzou@luigi ~/rnd/git/work $ cat Readme # after edit
+<span>This is the initial version.
+This line is the 2nd version
+task-1: a new branch
+master: insert a new line, which makes conflict with branch task-1 on merge.
+task-1: 2nd commit</span>
+jzou@luigi ~/rnd/git/work $ <b>git commit -a -m 'master merge task-1 again'</b>
+[master d04f3dd] master merge task-1 again
+jzou@luigi ~/rnd/git/work $ git log -p -4
+<div>commit d04f3dda49405b5ef39878739aba8ca4d1e366d7
+Merge: b348d8e 5adbd37
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 15:23:50 2013 -0400
+
+    master merge task-1 again
+</div>
+commit 5adbd375c7a190417e533b406106b7cf5cf1930d
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 15:20:50 2013 -0400
+
+    2nd commit in task-1
+
+diff --git a/Readme b/Readme
+index 310bb34..051e224 100644
+--- a/Readme
++++ b/Readme
+@@ -1,3 +1,4 @@
+ This is the initial version.
+ This line is the 2nd version (final)
+ task-1: a new branch
++task-1: 2nd commit
+
+<div>commit b348d8e003e4a6f6ae8519489229e4000b824e7e
+Merge: 3e30091 97274fc
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 14:39:39 2013 -0400
+
+    merge branch task-1 into master
+</div>
+commit 3e3009181a76fba48983f169317350a952c2ef1c
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 14:34:48 2013 -0400
+
+    a change after branch, a conflict will happen when merge branch back
+
+diff --git a/Readme b/Readme
+index 62506b8..c10b6f7 100644
+--- a/Readme
++++ b/Readme
+@@ -1,2 +1,3 @@
+ This is the initial version.
+-This line is the 2nd version (final)
++This line is the 2nd version
++insert a new line, which makes conflict with branch task-1 on merge.
+jzou@luigi ~/rnd/git/work $ 
+</pre>
+Notice that there's no (normal) patch/diff info at merge point. Here are rescues
+<table class="list">
+<tr>
+  <td>--merges</td>
+  <td>Print only merge commits.</td>
+</tr>
+<tr>
+  <td>-c</td>
+  <td>With this option, diff output for a merge commit shows the differences from each of the parents to the merge result simultaneously instead of showing pairwise diff between a parent and the result one at a time. Furthermore, it lists only files which were modified from all parents. </td>
+</tr>
+<tr>
+  <td>--cc</td>
+  <td>This flag implies the -c options and further compresses the patch output by omitting uninteresting hunks whose contents in the parents have only two variants and the merge result picks one of them without modification.</td>
+</tr>
+<tr>
+  <td>-m</td>
+  <td>This flag makes the merge commits show the full diff like regular commits; for each merge parent, a separate log entry and diff is generated. An exception is that only diff against the first parent is shown when --first-parent option is given; in that case, the output represents the changes the merge brought into the then-current branch.</td>
+</tr>
+</table>
+<pre>
+jzou@luigi ~/rnd/git/work $ git log -p --cc --merges
+commit d04f3dda49405b5ef39878739aba8ca4d1e366d7
+Merge: b348d8e 5adbd37
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 15:23:50 2013 -0400
+
+    master merge task-1 again
+
+diff --cc Readme
+index 76ad528,051e224..f2395f7
+--- a/Readme
++++ b/Readme
+@@@ -1,4 -1,4 +1,5 @@@
+  This is the initial version.
+ -This line is the 2nd version (final)
+ +This line is the 2nd version
+  task-1: a new branch
+ +master: insert a new line, which makes conflict with branch task-1 on merge.
++ task-1: 2nd commit
+
+commit b348d8e003e4a6f6ae8519489229e4000b824e7e
+Merge: 3e30091 97274fc
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 14:39:39 2013 -0400
+
+    merge branch task-1 into master
+
+diff --cc Readme
+index c10b6f7,310bb34..76ad528
+--- a/Readme
++++ b/Readme
+@@@ -1,3 -1,3 +1,4 @@@
+  This is the initial version.
+ -This line is the 2nd version (final)
+ +This line is the 2nd version
+- insert a new line, which makes conflict with branch task-1 on merge.
++ task-1: a new branch
+++master: insert a new line, which makes conflict with branch task-1 on merge.
+jzou@luigi ~/rnd/git/work $ 
+</pre>
+<pre>
+jzou@luigi ~/rnd/git/work $ git log -p -m --merges -1
+commit d04f3dda49405b5ef39878739aba8ca4d1e366d7 (from b348d8e003e4a6f6ae8519489229e
+Merge: b348d8e 5adbd37
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 15:23:50 2013 -0400
+
+    master merge task-1 again
+
+diff --git a/Readme b/Readme
+index 76ad528..f2395f7 100644
+--- a/Readme
++++ b/Readme
+@@ -2,3 +2,4 @@ This is the initial version.
+ This line is the 2nd version
+ task-1: a new branch
+ master: insert a new line, which makes conflict with branch task-1 on merge.
++task-1: 2nd commit
+
+commit d04f3dda49405b5ef39878739aba8ca4d1e366d7 (from 5adbd375c7a190417e533b406106b
+Merge: b348d8e 5adbd37
+Author: jason <jzou@opentext.com>
+Date:   Thu Jun 20 15:23:50 2013 -0400
+
+    master merge task-1 again
+
+diff --git a/Readme b/Readme
+index 051e224..f2395f7 100644
+--- a/Readme
++++ b/Readme
+@@ -1,4 +1,5 @@
+ This is the initial version.
+-This line is the 2nd version (final)
++This line is the 2nd version
+ task-1: a new branch
++master: insert a new line, which makes conflict with branch task-1 on merge.
+ task-1: 2nd commit
+
+</pre>
+
+
+<h2>$GIT_DIR</h2>
+$GIT_DIR can be used when repository and working directories are separated
+(in normal senario, repoistiory locates in .git of the top working directory).
+In the following example, we check out different branches in different working directory
+using the same repository.
+<pre>
+jzou@luigi ~/rnd/git/work $ cd ../branch
+jzou@luigi ~/rnd/git/branch $ ls
+jzou@luigi ~/rnd/git/branch $ <b>export GIT_DIR=/home/jzou/rnd/git/work/.git</b>
+jzou@luigi ~/rnd/git/branch $ <b>git checkout task-1</b>
+jzou@luigi ~/rnd/git/branch $ git branch
+  master
+* task-1
+jzou@luigi ~/rnd/git/branch $ ls -l
+total 4
+<span>-rw-rw-r-- 1 jzou jzou 106 Jun 20 15:37 Readme</span>
+jzou@luigi ~/rnd/git/branch $ cd ../work
+jzou@luigi ~/rnd/git/work $ git branch
+  master
+* task-1
+jzou@luigi ~/rnd/git/work $ git checkout master
+<div>error: Your local changes to the following files would be overwritten by checkout:
+        Readme
+Please, commit your changes or stash them before you can switch branches.
+Aborting</div>
+jzou@luigi ~/rnd/git/work $ ls -l
+total 4
+<span>-rw-rw-r-- 1 jzou jzou 175 Jun 20 15:22 Readme</span>
+jzou@luigi ~/rnd/git/work $ <b>git checkout -f master</b>
+Switched to branch 'master'
+jzou@luigi ~/rnd/git/work $ ls -l
+total 4
+<span>-rw-rw-r-- 1 jzou jzou 175 Jun 20 15:40 Readme</span>
+jzou@luigi ~/rnd/git/work $
+</pre>
+Because the same repository is shared by two working directories, there's no benefit
+if they are working this way even we have two copies (for example, you still have to
+rebuild after switching branch. Here is the trick by using -m when checkout. It is
+supposed to merge automatically, however since nothing is merged, no file is changed either.
+<pre>
+jzou@luigi ~/rnd/git/work $ cd ../branch
+jzou@luigi ~/rnd/git/branch $ ls -l
+total 4
+<span>-rw-rw-r-- 1 jzou jzou 106 Jun 20 15:37 Readme</span>
+jzou@luigi ~/rnd/git/branch $ <b>git checkout -m task-1</b>
+Switched to branch 'task-1'
+jzou@luigi ~/rnd/git/branch $ ls -l
+total 4
+<span>-rw-rw-r-- 1 jzou jzou 106 Jun 20 15:37 Readme</span>
+jzou@luigi ~/rnd/git/branch $ cd ../work
+jzou@luigi ~/rnd/git/work $ ls -l
+total 4
+<span>-rw-rw-r-- 1 jzou jzou 175 Jun 20 15:40 Readme</span>
+jzou@luigi ~/rnd/git/work $ <b>git checkout -m master</b>
+Switched to branch 'master'
+jzou@luigi ~/rnd/git/work $ ls -l
+total 4
+<span>-rw-rw-r-- 1 jzou jzou 175 Jun 20 15:40 Readme</span>
+
+</pre>
+
+</body>
+</html>

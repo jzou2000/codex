@@ -1,0 +1,75 @@
+
+pathogen.vim
+====
+Manage 'runtimepath' with ease.
+
+.Usage
+Add this in vimrc
+  call pathogen#infect()
+Now any plugins you wish to install can be extracted to a subdirectory under
+~/.vim/bundle, and they will be added to the 'runtimepath'.
+
+.Installation
+$ mkdir -p ~/.vim/autoload ~/.vim/bundle
+$ curl 'www.vim.org/scripts/download_script.php?src_id=19375' > ~/.vim/autoload/pathogen.vim
+
+
+
+NERDtree
+====
+
+.Usage
+:NERDTree               create split of NERDtree window
+o                       open in prev window
+t                       open in new tab
+i                       open split
+
+.Installation
+$ curl 'www.vim.org/scripts/download_script.php?src_id=17123' > ~/.vim/bundle/nerdtree.zip
+
+
+minibufexpl
+====
+.Usage
+<Leader>mbe  display (m)ini(b)uf(e)xpl
+
+.Installation
+$ curl 'www.vim.org/scripts/download_script.php?src_id=3640' > ~/.vim/plugin/minibufexpl.vim
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 68055  100 68055    0     0   433k      0 --:--:-- --:--:-- --:--:--  515k
+
+.vim
+:buffers   list buffers
+:ls        list buffers
+:buffer n  edit n-th buffer, also :bnext, :bprevious, :bfirst, :blast
+:buffer /pattern  edit buffer of pattern
+gf         edit file under the cursor (in #include)
+
+split window
+:split file.c           split and edit file.c
+:vsplit file.c          vertically split and edit file.c
+:new                    new window with empty file
+:3split alpha.c         split with 3 lines and edit alpha.c
+C-W +                   increase the size
+C-W -                   decrease the size
+C-W h                   move to window left (hjkltb)
+
+
+
+fugitive
+====
+.Installation
+$cd ~/.vim/bundle
+git clone git://github.com/tpope/vim-fugitive.git
+
+tagbar
+====
+.Usage
+:TagbarOpen     open tagbar window (right by default)
+jump to tag     move cursor to tag in tagbar and press <Enter>
+
+.Installation
+$cd ~/.vim/bundle
+git clone https://github.com/majutsushi/tagbar.git
+
