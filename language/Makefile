@@ -1,28 +1,37 @@
 
+.PHONY:		clean
+
 CC = gcc
 CXX = g++
-CFLAGS = -O3
-CXXFLAGS = $(CFLAGS)
+CFLAGS = -g -O3
+CXXFLAGS = $(CFLAGS) -std=c++11
 LDFLAGS =
+LIBS	:= -lm -lpthread
 
-cpp-virtual: cpp-virtual.o
-	$(CXX) -o $@ $? $(LDFLAGS)
 
-cpp_contain: cpp_contain.o
-	$(CXX) -o $@ $? $(LDFLAGS)
+TARGET  := o/cqsort o/qsort qsort.class
 
-qsort: qsort.o
-	$(CXX) -o $@ $(CXXFLAGS) $? $(LDFLAGS)
+ALL: prebuild $(TARGET)
+	@echo done
 
-cqsort: cqsort.o
+o/cqsort: cqsort.c
 	$(CC) -o $@ $(CFLAGS) $? $(LDFLAGS)
 
+o/qsort: qsort.o
+	$(CXX) -o $@ $(CXXFLAGS) $? $(LDFLAGS)
+
 qsort.class: qsort.java
-	javac qsort.java
+	javac -d o qsort.java
 
-.cpp.o:
-	$(CXX) -c $(CXXFLAGS) $<
+prebuild:
+	@if [ ! -d o ]; then mkdir -p o; fi
 
-.c.o:
-	$(CC) -c $(CFLAGS) $<
+clean:
+	@rm -rf o
+
+o/%.o: %.cpp
+	$(CXX) -c $(CXXFLAGS) -o $@ $<
+
+o/%.o: %.c
+	$(CC) -c $(CFLAGS) -o $@ $<
 
