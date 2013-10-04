@@ -778,11 +778,11 @@ class MyPage(object):
             if by_level:
                 for i in range(1,10):
                     h = self.mypage.xpath('.//h%d' % i)
-                    if h: return h[0].text
+                    if h: return tag2text(h[0])
             else:
                 # get first head, what ever
                 h = self.mypage.xpath(MyPage.h_all)
-                if h: return h[0].text
+                if h: return tag2text(h[0])
             txt = tag2text(self.mypage)
             if txt:
                 for i, t in enumerate(pattern_newline.split(txt)):
