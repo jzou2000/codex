@@ -1,0 +1,97 @@
+src
+    None
+    Path to the source directory. None means cwd()
+
+root
+    epub
+    Path to the destination (or output) directory, which is the root or epub
+    structure, which is typically as:
+     epub/
+       mimetype
+       META-INF/
+       OEBPS/                 [ open ebook publication structure ]
+         toc.ncx
+         content.opf
+         xxx.xhtml            [ and .css, resources in sub-folders ]
+
+xpath
+    div.htmlcontent
+    XPath in each content page that is used to extract content for the ebook.
+    The default value is for safari-online book.
+
+title
+    Unknown
+    The title of the ebook. The value is stored in
+      <metadata>
+        <dc:title>
+
+title2
+    None
+    The sub-title of the ebook. Subtitle is a component in cover page
+    if the cover is not an image, its CSS is
+        div#book-cover-title2
+
+author
+    Unknown
+    The author of the ebook. The value is stored in 
+      <metadata>
+        <dc:creator opf:role="aut">
+
+other
+    None
+    A component in cover page if the cover is not an image, its CSS is
+        div#book-cover-other
+
+cover
+    None
+    Cover image. If it is not specified, $src/cover.* will be searched, or
+    an composite xhtml is generated using title/title2/author if no image
+    is found.
+
+epub
+    None
+    The name of epub file. If it is absent, $src.epub (or $cwd.epub if even
+    src is missing) is used.
+
+unwrap
+    True
+    If set, the tag specified by xpath is unwrapped, otherwise, the tag itself
+    is inserted into the target <body>.
+
+reflow
+    False
+    If set, the content is reflown. This is especially useful for some old
+    pages that use following style:
+     <pre>
+        pre-formatted text, with page-width and paragraphs by hard <CR>
+     </pre>
+
+pagewidth
+    None
+    Page width when reflow is used.
+
+autopara
+    None
+    When reflow is used, detect paragraphs automatically.
+
+encoding
+    utf-8
+    Encoding of the content, usually detectable from the html page itself.
+    Used as a fallback if the page doesn't contains encoding information.
+
+count
+    0
+    For debug purpose only. Stop processing pages when the count reaches.
+
+url
+    None
+    URL that is used for download a group of pages.
+
+xpath-i
+    None
+    XPath that is used to extract index information from an index page.
+
+dumpload
+    ?
+    ?
+

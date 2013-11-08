@@ -1,0 +1,44 @@
+.h2 String Format
+
+.c++
+
+boost::format(format-string) % arg1 % arg2 % ... % argN
+
+.python
+
+>>> '%8.2f' % 10.3456
+'   10.35'
+>>> '%-8.2f' % 10.3456
+'10.35   '
+>>> d = { 'a': 100,  'b': 'a string' }
+>>> 'This is a {1} {0[a]} string'.format(d, 'what')
+'This is a what 100 string'
+>>> '{a}'.format(a='100', b='cc')
+'100'
+
+
+
+.perl
+
+
+.java
+
+
+
+.h2 Regular Expression
+
+
+
+.h2 Simple Concurrency
+
+
+
+.h2 Thread Pattern
+
+
+
+
+
+.h2 Exception
+
+
