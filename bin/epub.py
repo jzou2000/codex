@@ -99,17 +99,29 @@ _T_index = u'''<?xml version="1.0" encoding="utf-8" standalone="no"?>
   <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
   <title>{title}</title>
   <link rel="stylesheet" type="text/css" href="style.css" />
-  <!--<script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.3/jquery-ui.min.js"></script>-->
-  <script src="/lib/jquery.js"></script>
-  <script type="text/javascript">{js}</script>
 </head>
 
+<frameset cols="25%,75%">
+  <frame src="findex.html" name="LeftFrame">
+  <frame src="{firstpage}" name="RightFrame">
+</frameset>
+</html>
+'''
+_T_frame_left = u'''<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+  "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+  <base target="RightFrame"/>
+  <style>
+    a.ci { display: block; white-space: nowrap; }
+    a.ci2 { margin-left: 2em; }
+  </style>
+</head>
 <body>
-<div id="index"> <div>{content}</div> </div>
-<div id="content-wrapper">
-  <h1>{title}</h1>
-  <div id="content"> </div>
-</div>
+ANCHORS
 </body>
 </html>
 '''
@@ -448,15 +460,17 @@ class EPub:
     
 
     def exportIndex(self, tocUUID=None):
-        ''' Export /index.html, which is not used by epub but used by browsing
+        ''' Export /index.html, /findex.html, which are not used by epub but used by browsing
             when expanded.
         '''
         try:
-            sa = [ u'<div class="ci ci{level}" src="{href}">{text}<div>'.format(**x)
+            sa = [ u'  <a class="ci ci{level}" href="{href}">{text}</a>'.format(**x)
                 for x in self.toc ]
             si = u'\n'.join(sa)
+            with codecs.open(self.root + '/OEBPS/findex.html', 'w', 'utf-8') as fp:
+                fp.write(_T_frame_left.replace('ANCHORS', u'\n'.join(sa)))
             with codecs.open(self.root + '/OEBPS/index.html', 'w', 'utf-8') as fp:
-                fp.write(_T_index.format(title=self.cfg['title'], content=si, js=_T_JS))
+                fp.write(_T_index.format(title=self.cfg['title'], firstpage=self.toc[0]['href']))
         except Exception as ex:
             print('Fail to export index.html: {0}, skipped'.format(ex))
 
@@ -778,11 +792,11 @@ class MyPage(object):
             if by_level:
                 for i in range(1,10):
                     h = self.mypage.xpath('.//h%d' % i)
-                    if h: return h[0].text
+                    if h: return tag2text(h[0])
             else:
                 # get first head, what ever
                 h = self.mypage.xpath(MyPage.h_all)
-                if h: return h[0].text
+                if h: return tag2text(h[0])
             txt = tag2text(self.mypage)
             if txt:
                 for i, t in enumerate(pattern_newline.split(txt)):

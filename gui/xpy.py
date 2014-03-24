@@ -32,7 +32,6 @@ class Window:
                 raise SystemExit
  
  
-if __name__ == "__main__" or True:
-    print('name=%s' % __name__)
+if __name__ == "__main__":
     Window(display.Display(), "Hello, World!").loop()
 

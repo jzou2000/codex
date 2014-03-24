@@ -1,0 +1,37 @@
+
+.h2 xpyb
+
+import xcb
+from xcb.xproto import *
+
+conn = xcb.connect(display='host:display.screen', auth='NAME:binary-data')
+setup = conn.get_setup()
+conn.flush()
+conn.wait_for_event()
+conn.generate_id()
+
+core = conn.core;
+render = conn(xcb.render.key)
+
+atom = 5
+cookie = core.GetAtomName(atom)
+reply = cookie.reply()
+atom_name = str(reply.name.buf())
+
+cookie = core.CreateWindowChecked(...)
+cookie.check()
+
+cookie = render.FillRectangles(...)
+
+try:
+    cookie.check()
+    event = conn.wait_for_event()
+    if isinstance(event, ExposeEvent):
+        print "(%d,%d)" % (event.event_x, event.event_y)
+except xcb.xproto.BadMatch as e:
+    error = e.args[0]
+    print "BadMatch: value %d" % error.bad_value
+except IOError: # X connection breaks
+    raise
+
+
