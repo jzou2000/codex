@@ -2,6 +2,12 @@
 
 import time, os
 import threading
+import pygtk
+pygtk.require('2.0')
+import gtk
+
+
+class MyGui
 
 class Demo(threading.Thread):
     sid = 0
