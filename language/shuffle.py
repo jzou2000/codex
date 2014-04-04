@@ -6,6 +6,10 @@ import sys, time, random
     The file can be used as source for different sort/search algorithms.
 '''
 
+if len(sys.argv) == 2 and sys.argv[1] == '-h':
+    print 'usage: shuffle.py count-of-element [ output-file-name = stdout ]'
+    sys.exit()
+
 try:
     count = int(sys.argv[1])
     if count < 20:

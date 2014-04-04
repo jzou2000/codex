@@ -8,23 +8,27 @@ CXXFLAGS = $(CFLAGS) -std=c++11
 LDFLAGS =
 LIBS	:= -lm -lpthread
 
+C_T	:= cqsort
+CPP_T	:= qsort qsort-m qsort-m2
+J_T	:= #qsort
 
-TARGET  := o/cqsort o/qsort o/qsort-m o/qsort-m2 #qsort.class
+TARGET  := $(patsubst %,o/%,$(C_T)) \
+	   $(patsubst %,o/%,$(CPP_T))\
+	   $(patsubst %,o/%.class,$(J_T))
+	   
 
 ALL: prebuild $(TARGET)
-	@echo done
+	@echo done 
+
+macro:
+	@echo dump macros
+	@echo $(TARGET)
+
+o/%: o/%.o
+	$(CXX) -o $@ $(CXXFLAGS) $? $(LDFLAGS) $(LIBS)
 
 o/cqsort: cqsort.c
 	$(CC) -o $@ $(CFLAGS) $? $(LDFLAGS)
-
-o/qsort: o/qsort.o
-	$(CXX) -o $@ $(CXXFLAGS) $? $(LDFLAGS)
-
-o/qsort-m: o/qsort-m.o
-	$(CXX) -o $@ $(CXXFLAGS) $? $(LDFLAGS) $(LIBS)
-
-o/qsort-m2: o/qsort-m2.o
-	$(CXX) -o $@ $(CXXFLAGS) $? $(LDFLAGS) $(LIBS)
 
 qsort.class: qsort.java
 	javac -d o qsort.java
