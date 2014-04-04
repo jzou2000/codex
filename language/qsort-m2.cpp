@@ -48,9 +48,6 @@ typedef vector<int> V;
 
 namespace codex {
     template <typename T>
-    class QuickSort;
-
-    template <typename T>
     class QuickSort {
 	public:
 	    QuickSort(T& data) : data_(data) {}
