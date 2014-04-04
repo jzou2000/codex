@@ -29,27 +29,25 @@
 #include <exception>
 #include <iostream>
 #include <fstream>
+#include <iterator>
 #include <vector>
 #include <algorithm>
 
-#include <sys/time.h>
+#include <chrono>
 
 
 using namespace std;
 
 float timeit(void)
 {
-    static struct timeval tv_last = {0, 0};
-    struct timeval tv = {0, 0};
+    using namespace std::chrono;
+    static system_clock::time_point tp_last;
 
-    float elapse = 0.0;
+    system_clock::time_point now = system_clock::now();
+    milliseconds ms = duration_cast<milliseconds>(now - tp_last);
+    tp_last = now;
 
-    if (0 == gettimeofday(&tv, NULL)) {
-        elapse = (tv.tv_sec - tv_last.tv_sec)
-                + (tv.tv_usec - tv_last.tv_usec) /1000000.0;
-    }
-    tv_last = tv;
-    return elapse;
+    return ms.count()/1000.0;
 }
 
 
@@ -117,20 +115,18 @@ int main(int argc, char* argv[])
 {
     try {
         cout.setf(std::ios::fixed);
-        cout.precision(2);
+        cout.precision(3);
 
         std::fstream f(argv[1]);
         if (!f.good())
             throw std::string("Fail to open the file");
 
         V v;
-        int i;
         timeit();
-        while ((f >> i)) {
-            v.push_back(i);
-        }
+	copy(istream_iterator<int>(f), istream_iterator<int>(), back_inserter(v));
         cout << "load: " << timeit() << endl;
         int size = v.size();
+	cout << "    " << size << " items" << endl;
 
         timeit();
         V v2 = v;
@@ -142,7 +138,7 @@ int main(int argc, char* argv[])
 
         /* validate the result is correct. The input is shuffled
          * from python range(number) */
-        i = 0;
+        int i = 0;
         timeit();
         for (V::iterator it = v.begin(); it != v.end(); ++it, ++i) {
             if (i != *it) {
