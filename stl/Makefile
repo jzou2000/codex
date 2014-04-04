@@ -3,7 +3,7 @@
 
 CC = gcc
 CXX = g++
-CFLAGS = -g
+CFLAGS = -g -O3
 CXXFLAGS = $(CFLAGS) -std=c++11
 LDFLAGS =
 
@@ -11,7 +11,7 @@ LIBS	:= -lm -lpthread
 
 CPP_T	:=
 STL_T	:= re copy lambda cast \
-           async
+           async async2 mt-pc
 BOOST_T	:= regex lambda
 
 TARGET  := $(patsubst %,o/cpp-%,$(CPP_T)) \
