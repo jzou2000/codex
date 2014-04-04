@@ -9,7 +9,7 @@ LDFLAGS =
 LIBS	:= -lm -lpthread
 
 
-TARGET  := o/cqsort o/qsort qsort.class
+TARGET  := o/cqsort o/qsort o/qsort-m o/qsort-m2 #qsort.class
 
 ALL: prebuild $(TARGET)
 	@echo done
@@ -17,8 +17,14 @@ ALL: prebuild $(TARGET)
 o/cqsort: cqsort.c
 	$(CC) -o $@ $(CFLAGS) $? $(LDFLAGS)
 
-o/qsort: qsort.o
+o/qsort: o/qsort.o
 	$(CXX) -o $@ $(CXXFLAGS) $? $(LDFLAGS)
+
+o/qsort-m: o/qsort-m.o
+	$(CXX) -o $@ $(CXXFLAGS) $? $(LDFLAGS) $(LIBS)
+
+o/qsort-m2: o/qsort-m2.o
+	$(CXX) -o $@ $(CXXFLAGS) $? $(LDFLAGS) $(LIBS)
 
 qsort.class: qsort.java
 	javac -d o qsort.java
