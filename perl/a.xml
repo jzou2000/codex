@@ -1,0 +1,14 @@
+<?xml version="1.0" ?>
+<ata>
+    <package>
+    	this is general package
+    </package>
+    <package platform="windows">
+    	this is a windows package
+    </package>
+    <package platform="linux">
+    	this is a windows package
+    </package>
+    <macro>
+    </macro>
+</ata>

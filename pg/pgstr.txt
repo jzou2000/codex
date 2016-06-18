@@ -1,0 +1,102 @@
+concat    	s1 || s2
+			concat(s1, s2, ...)
+			concat_ws(sep, s1, s2, ...)
+length		char_length(s)
+			length(s)
+lower		lower(s)
+upper		upper(s)
+overlay		overlay(s placing s from i for i)
+index		position(ss in s)
+substr		substring(s from i [for i])
+			substring(s from pattern [for escape])
+			substr(s, from, count)
+trim		trim([leading|trailing|both] [chars] from s)
+pad			lpad(s, n, fill)
+			rpad(s, n, fill)
+sprintf		format(fmt, ...)
+captital	initcap(s)
+left		left(s, n)
+			right(s,n)
+re			regexp_match(s, pattern[, flags])
+			regexp_replace(s, pattern, rep[, flags])
+			regexp_split_to_array(s, pattern[, flags])
+			regexp_split_to_table(s, pattern[, flags])
+replace     replace(s, from tof)
+reverse		reverse(s)
+
+
+pl/pgSQL
+
+<<label>>
+declare
+	v type;
+begin
+	...
+end;
+
+perform query;	-- drop result
+select .. into var from ... -- get one-row result
+	exception
+		when no_data_found then
+			..
+		when too_many_rows then
+			...
+execute sql_str		-- dynamic execute sql string
+get [current] diagnostics v = ...  -- get result/status
+	row_count
+	result_oid
+	found
+null;		-- do nothing
+return [value]; -- return
+	return next;
+	return query sql;
+if	-- conditio
+	if .. then .. elsif .. then .. else .. end if;
+	case .. when .. then .. when .. then .. else .. end case;
+loop -- loop
+	loop .. end loop;
+	while .. loop .. end loop;
+	for name in .. loop .. end loop;
+	for taget in query loop ... end loop;
+	foreach target [slice number] in array .. loop .. end loop;
+	exit [label] [ when ... ];
+	continue [label] [when ...];
+exception
+	begin
+		...
+	exception
+		when ... or ... then
+			...
+		when ... or ... then
+			...
+	end;
+common exception
+	no_data
+	..._violation
+	syntax_error
+	..._error
+	duplicate_...
+
+
+
+trigger
+NEW
+OLD
+TG_NAME
+TG_WHEN			before,after,instead of
+TG_LEVEL		row, statement
+TG_OP			insert,update,delete,truncate
+TG_RELID
+TG_TABLE_NAME
+TG_TABLE_SCHEMA
+TG_NARGS
+TG_ARGV[]
+
+CREATE FUNCTION proc_trigger() RETURNS TRIGGER AS $$
+BEGIN
+	...
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER trigger_name BEFORE INSERT OR UPDATE ON table_name
+	FOR EACH ROW EXECUTE PROCEDURE proc_trigger();
+
